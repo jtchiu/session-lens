@@ -23,6 +23,17 @@ public enum CodexAppServerClientError: Error, Equatable {
 }
 
 public actor CodexAppServerClient: CodexAccountReading {
+    private enum Method: String, CaseIterable {
+        case initialize
+        case initialized
+        case readRateLimits = "account/rateLimits/read"
+        case readUsage = "account/usage/read"
+    }
+
+    public nonisolated static let allowedMethods = Set(
+        Method.allCases.map(\.rawValue)
+    )
+
     private static let optOutNotificationMethods = [
         "thread/started",
         "thread/status/changed",
@@ -69,14 +80,14 @@ public actor CodexAppServerClient: CodexAccountReading {
 
     public func readUsage() async throws -> CodexAccountUsageResponse {
         try await readAccountMethod(
-            "account/usage/read",
+            .readUsage,
             as: CodexAccountUsageResponse.self
         )
     }
 
     public func readRateLimits() async throws -> CodexRateLimitsResponse {
         try await readAccountMethod(
-            "account/rateLimits/read",
+            .readRateLimits,
             as: CodexRateLimitsResponse.self
         )
     }
@@ -88,7 +99,7 @@ public actor CodexAppServerClient: CodexAccountReading {
     }
 
     private func readAccountMethod<Response: Decodable>(
-        _ method: String,
+        _ method: Method,
         as type: Response.Type
     ) async throws -> Response {
         await acquireRequestLock()
@@ -110,7 +121,7 @@ public actor CodexAppServerClient: CodexAccountReading {
         do {
             try await transport.start()
             _ = try await sendRequestLocked(
-                method: "initialize",
+                method: .initialize,
                 params: [
                     "clientInfo": .object([
                         "name": .string("sessionlens"),
@@ -126,7 +137,9 @@ public actor CodexAppServerClient: CodexAccountReading {
                     ]),
                 ]
             )
-            try await transport.send(["method": .string("initialized")])
+            try await transport.send([
+                "method": .string(Method.initialized.rawValue)
+            ])
             isConnected = true
         } catch {
             await resetTransportLocked()
@@ -135,14 +148,14 @@ public actor CodexAppServerClient: CodexAccountReading {
     }
 
     private func sendRequestLocked(
-        method: String,
+        method: Method,
         params: [String: JSONValue]? = nil
     ) async throws -> [String: JSONValue] {
         let requestID = nextRequestID
         nextRequestID += 1
         var request: [String: JSONValue] = [
             "id": .number(Double(requestID)),
-            "method": .string(method),
+            "method": .string(method.rawValue),
         ]
         if let params {
             request["params"] = .object(params)
@@ -157,13 +170,13 @@ public actor CodexAppServerClient: CodexAccountReading {
             let object = try await transport.nextObject(timeout: remaining)
             guard Self.requestID(in: object) == requestID else { continue }
 
-            if case let .object(error)? = object["error"] {
+            if case .object(let error)? = object["error"] {
                 throw CodexAppServerClientError.serverError(
                     code: Self.integer(in: error["code"]),
                     message: Self.string(in: error["message"])
                 )
             }
-            guard case let .object(result)? = object["result"] else {
+            guard case .object(let result)? = object["result"] else {
                 throw CodexAppServerClientError.malformedResponse
             }
             return result
@@ -198,7 +211,7 @@ public actor CodexAppServerClient: CodexAccountReading {
     }
 
     private static func integer(in value: JSONValue?) -> Int? {
-        guard case let .number(number)? = value,
+        guard case .number(let number)? = value,
             number.rounded(.towardZero) == number
         else {
             return nil
@@ -207,7 +220,7 @@ public actor CodexAppServerClient: CodexAccountReading {
     }
 
     private static func string(in value: JSONValue?) -> String? {
-        guard case let .string(string)? = value else { return nil }
+        guard case .string(let string)? = value else { return nil }
         return string
     }
 }
@@ -291,7 +304,7 @@ public actor FoundationJSONLTransport: JSONLTransport {
     public func nextObject(timeout: Duration) async throws -> [String: JSONValue] {
         guard let lines else { throw JSONLTransportError.notStarted }
         switch await lines.next(timeout: timeout) {
-        case let .line(data):
+        case .line(let data):
             do {
                 return try JSONDecoder().decode([String: JSONValue].self, from: data)
             } catch {

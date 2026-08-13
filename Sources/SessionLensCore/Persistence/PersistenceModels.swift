@@ -134,3 +134,13 @@ enum SessionLensPersistenceModel {
         return attribute
     }
 }
+
+public enum PersistencePrivacyIntrospector {
+    public static var persistedPropertyNames: Set<String> {
+        Set(
+            SessionLensPersistenceModel.makeModel().entities.flatMap { entity in
+                entity.properties.map(\.name)
+            }
+        )
+    }
+}

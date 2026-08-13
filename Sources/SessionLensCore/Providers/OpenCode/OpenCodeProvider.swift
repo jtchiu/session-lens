@@ -1,6 +1,31 @@
 import Foundation
 
 public struct OpenCodeProvider: UsageProvider {
+    public static let allowedSQLIdentifiers: Set<String> = [
+        "asc",
+        "as",
+        "by",
+        "cost",
+        "date",
+        "day",
+        "from",
+        "group",
+        "json_extract",
+        "model",
+        "model_id",
+        "order",
+        "provider_id",
+        "select",
+        "session",
+        "sum",
+        "time_updated",
+        "tokens_cache_read",
+        "tokens_cache_write",
+        "tokens_input",
+        "tokens_output",
+        "tokens_reasoning",
+    ]
+
     public static let fixedAggregateSQL = """
         SELECT
           date(time_updated / 1000, 'unixepoch', 'localtime') AS day,
@@ -60,7 +85,7 @@ public struct OpenCodeProvider: UsageProvider {
             return .unavailable(provider: id, health: .toolMissing, observedAt: now)
         case .timedOut:
             return .unavailable(provider: id, health: .timedOut, observedAt: now)
-        case let .exited(code) where code != 0:
+        case .exited(let code) where code != 0:
             return .unavailable(
                 provider: id,
                 health: Self.failureHealth(stderr: result.stderr),
@@ -107,7 +132,8 @@ public struct OpenCodeProvider: UsageProvider {
             }
         }
 
-        let dailyBuckets = days
+        let dailyBuckets =
+            days
             .map { day, aggregate in
                 UsageBucket(
                     day: day,
@@ -116,7 +142,8 @@ public struct OpenCodeProvider: UsageProvider {
                 )
             }
             .sorted { $0.day < $1.day }
-        let modelBreakdowns = models
+        let modelBreakdowns =
+            models
             .map { key, aggregate in
                 ModelUsage(
                     providerID: key.providerID,
