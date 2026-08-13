@@ -251,12 +251,29 @@ enum Fixtures {
         )
     }
 
-    static func codexSnapshot(observedAt: Date = now) -> ProviderSnapshot {
+    static func codexSnapshot(
+        observedAt: Date = now,
+        percent: Double = 36
+    ) -> ProviderSnapshot {
         aggregateSnapshot(
             provider: .codex,
             observedAt: observedAt,
             costDisplay: .includedWithPlan,
-            quotaWindows: [quota(36)]
+            quotaWindows: [quota(percent)]
+        )
+    }
+
+    static func openCodeLocalBudget(_ percent: Double) -> ProviderSnapshot {
+        aggregateSnapshot(
+            provider: .opencode,
+            quotaWindows: [
+                quota(
+                    percent,
+                    id: "local-weekly",
+                    label: "Weekly",
+                    provenance: .localBudget
+                )
+            ]
         )
     }
 
