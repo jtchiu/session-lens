@@ -8,6 +8,8 @@
     <string>SessionLens</string>
     <key>CFBundleIdentifier</key>
     <string>com.justinchiu.SessionLens</string>
+    <key>CFBundleIconFile</key>
+    <string>SessionLens</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>

@@ -18,7 +18,11 @@ let package = Package(
   ],
   targets: [
     .target(name: "SessionLensCore"),
-    .executableTarget(name: "SessionLens", dependencies: ["SessionLensCore"]),
+    .executableTarget(
+      name: "SessionLens",
+      dependencies: ["SessionLensCore"],
+      resources: [.process("Resources")]
+    ),
     .executableTarget(name: "SessionLensClaudeBridge", dependencies: ["SessionLensCore"]),
     .testTarget(
       name: "SessionLensCoreTests",
