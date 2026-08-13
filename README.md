@@ -2,6 +2,8 @@
 
 SessionLens is a free, local-only macOS menu-bar utility inspired by SessionWatcher. It is a personal SwiftUI app for OpenCode, Claude Code, and Codex usage, costs, quota windows, history, charts, and optional notifications. It has no license key, subscription, backend, or telemetry.
 
+The project is available under the [MIT License](LICENSE).
+
 ## What SessionLens reads
 
 - OpenCode: `~/.local/share/opencode/opencode.db`, through one fixed `sqlite3 -readonly -json` aggregate query over the `session` table.
