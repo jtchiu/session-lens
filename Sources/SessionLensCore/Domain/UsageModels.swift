@@ -31,23 +31,46 @@ public struct TokenBreakdown: Codable, Hashable, Sendable {
     public let reasoning: Int
     public let cacheRead: Int
     public let cacheWrite: Int
+    public let uncategorized: Int
 
     public init(
         input: Int,
         output: Int,
         reasoning: Int,
         cacheRead: Int,
-        cacheWrite: Int
+        cacheWrite: Int,
+        uncategorized: Int = 0
     ) {
         self.input = input
         self.output = output
         self.reasoning = reasoning
         self.cacheRead = cacheRead
         self.cacheWrite = cacheWrite
+        self.uncategorized = uncategorized
     }
 
     public var total: Int {
-        input + output + reasoning + cacheRead + cacheWrite
+        input + output + reasoning + cacheRead + cacheWrite + uncategorized
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case input
+        case output
+        case reasoning
+        case cacheRead
+        case cacheWrite
+        case uncategorized
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        input = try container.decode(Int.self, forKey: .input)
+        output = try container.decode(Int.self, forKey: .output)
+        reasoning = try container.decode(Int.self, forKey: .reasoning)
+        cacheRead = try container.decode(Int.self, forKey: .cacheRead)
+        cacheWrite = try container.decode(Int.self, forKey: .cacheWrite)
+        uncategorized =
+            try container.decodeIfPresent(Int.self, forKey: .uncategorized) ?? 0
     }
 }
 

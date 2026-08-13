@@ -112,3 +112,36 @@ actor FakeJSONLTransport: JSONLTransport {
     func startCount() -> Int { starts }
     func stopCount() -> Int { stops }
 }
+
+struct FakeCodexClient: CodexAccountReading {
+    enum Failure: Error {
+        case requested
+    }
+
+    let rateLimits: CodexRateLimitsResponse
+    let usage: CodexAccountUsageResponse
+    let failsRateLimits: Bool
+    let failsUsage: Bool
+
+    init(
+        rateLimits: CodexRateLimitsResponse = Fixtures.codexTwoWindowLimits,
+        usage: CodexAccountUsageResponse = Fixtures.codexUsage,
+        failsRateLimits: Bool = false,
+        failsUsage: Bool = false
+    ) {
+        self.rateLimits = rateLimits
+        self.usage = usage
+        self.failsRateLimits = failsRateLimits
+        self.failsUsage = failsUsage
+    }
+
+    func readUsage() async throws -> CodexAccountUsageResponse {
+        if failsUsage { throw Failure.requested }
+        return usage
+    }
+
+    func readRateLimits() async throws -> CodexRateLimitsResponse {
+        if failsRateLimits { throw Failure.requested }
+        return rateLimits
+    }
+}

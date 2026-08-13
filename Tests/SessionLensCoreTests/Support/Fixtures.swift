@@ -103,6 +103,58 @@ enum Fixtures {
         "spendControlReached": .bool(false),
     ]
 
+    static let codexTwoWindowLimits = CodexRateLimitsResponse(
+        rateLimits: CodexRateLimitSnapshot(
+            limitId: "codex",
+            limitName: "Codex",
+            planType: "plus",
+            primary: CodexRateLimitWindow(
+                usedPercent: 42,
+                windowDurationMins: 300,
+                resetsAt: 1_735_693_200
+            ),
+            secondary: CodexRateLimitWindow(
+                usedPercent: 36,
+                windowDurationMins: 10_080,
+                resetsAt: 1_736_294_400
+            )
+        ),
+        rateLimitsByLimitId: [
+            "codex": CodexRateLimitSnapshot(
+                limitId: "codex",
+                limitName: "Codex",
+                planType: "plus",
+                primary: CodexRateLimitWindow(
+                    usedPercent: 42,
+                    windowDurationMins: 300,
+                    resetsAt: 1_735_693_200
+                ),
+                secondary: CodexRateLimitWindow(
+                    usedPercent: 36,
+                    windowDurationMins: 10_080,
+                    resetsAt: 1_736_294_400
+                )
+            )
+        ]
+    )
+
+    static let codexUsage = CodexAccountUsageResponse(
+        summary: CodexAccountUsageSummary(
+            lifetimeTokens: 500_000_000,
+            currentStreakDays: 4,
+            longestStreakDays: 12,
+            peakDailyTokens: 453_544_969,
+            longestRunningTurnSec: 3_600
+        ),
+        dailyUsageBuckets: [
+            CodexDailyUsageBucket(startDate: "2025-01-01", tokens: 1_000),
+            CodexDailyUsageBucket(
+                startDate: "2025-01-02",
+                tokens: 453_544_969
+            ),
+        ]
+    )
+
     static func day(_ offset: Int) -> Date {
         Calendar.utc.date(byAdding: .day, value: offset, to: now)!
     }
