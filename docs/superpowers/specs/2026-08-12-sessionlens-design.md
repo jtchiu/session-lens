@@ -142,7 +142,7 @@ The bridge never writes `cwd`, workspace fields, transcript path, session name, 
 
 Installation is explicit. The app backs up the exact existing `statusLine` settings block, installs a wrapper, and records a checksum. Uninstall restores the original block only when the wrapper still matches that checksum; otherwise it stops and explains the conflict instead of overwriting a user's later edit.
 
-History begins when the bridge is installed. Session-level cumulative counters are converted to deltas using the hashed session identifier and monotonically increasing totals.
+History begins when the bridge is installed. Claude's estimated session cost is cumulative and resets with a new session. Claude's status-line token fields describe the live context from the most recent API response, so SessionLens displays them as a current context snapshot and never differences them into fabricated daily token usage. The hashed session identifier is retained only for safe reset detection; five-hour and seven-day quota values remain exact provider metrics.
 
 ### 6.3 OpenCode
 

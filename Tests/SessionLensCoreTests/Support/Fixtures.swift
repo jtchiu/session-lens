@@ -3,6 +3,47 @@ import Foundation
 
 enum Fixtures {
     static let now = Date(timeIntervalSince1970: 1_735_689_600)
+    static let claudeOfficialStatusLineJSON = Data(
+        #"""
+        {
+          "session_id": "session-secret",
+          "model": {"id": "claude-opus-4-1", "display_name": "Opus 4.1"},
+          "cost": {
+            "total_cost_usd": 0.01234,
+            "total_duration_ms": 45000,
+            "total_api_duration_ms": 2300,
+            "total_lines_added": 156,
+            "total_lines_removed": 23
+          },
+          "context_window": {
+            "total_input_tokens": 15500,
+            "total_output_tokens": 1200,
+            "context_window_size": 200000,
+            "used_percentage": 8,
+            "remaining_percentage": 92,
+            "current_usage": {
+              "input_tokens": 8500,
+              "output_tokens": 1200,
+              "cache_creation_input_tokens": 5000,
+              "cache_read_input_tokens": 2000
+            }
+          },
+          "rate_limits": {
+            "five_hour": {"used_percentage": 23.5, "resets_at": 1738425600},
+            "seven_day": {"used_percentage": 41.2, "resets_at": 1738857600}
+          },
+          "version": "2.1.90",
+          "cwd": "/private/project",
+          "workspace": {"current_dir": "/private/project"},
+          "transcript_path": "/private/transcript.jsonl",
+          "session_name": "private session",
+          "prompt": "private prompt",
+          "source": "private source",
+          "git": {"branch": "secret"},
+          "agent": {"name": "secret-agent"}
+        }
+        """#.utf8
+    )
     static let openCodeDatabaseURL = URL(fileURLWithPath: "/dev/null")
     static let sqliteURL = URL(fileURLWithPath: "/usr/bin/sqlite3")
     static let openCodeRowsJSON = Data(
@@ -216,6 +257,39 @@ enum Fixtures {
             observedAt: observedAt,
             costDisplay: .includedWithPlan,
             quotaWindows: [quota(36)]
+        )
+    }
+
+    static func claudeCache(
+        tokens: Int,
+        sessionCostUSD: Double?,
+        sessionHash: String = String(repeating: "a", count: 64),
+        observedAt: Date = now
+    ) -> ClaudeNormalizedCache {
+        ClaudeNormalizedCache(
+            observedAt: observedAt,
+            sessionHash: sessionHash,
+            modelID: "claude-opus-4-1",
+            modelDisplayName: "Opus 4.1",
+            estimatedSessionCostUSD: sessionCostUSD,
+            contextTokens: TokenBreakdown(
+                input: tokens,
+                output: 0,
+                reasoning: 0,
+                cacheRead: 0,
+                cacheWrite: 0
+            ),
+            contextWindowSize: 200_000,
+            contextUsedPercent: 12,
+            fiveHour: ClaudeNormalizedRateLimit(
+                usedPercent: 23.5,
+                resetsAt: now.addingTimeInterval(3_600)
+            ),
+            sevenDay: ClaudeNormalizedRateLimit(
+                usedPercent: 41.2,
+                resetsAt: now.addingTimeInterval(86_400)
+            ),
+            version: "2.1.90"
         )
     }
 }

@@ -301,6 +301,8 @@ public final class SnapshotRepository {
         switch cost {
         case let .exactUSD(value):
             ("exactUSD", value)
+        case let .estimatedUSD(value):
+            ("estimatedUSD", value)
         case .includedWithPlan:
             ("includedWithPlan", nil)
         case .unavailable:
@@ -315,6 +317,11 @@ public final class SnapshotRepository {
                 throw SnapshotRepositoryError.corruptCostDisplay(kind)
             }
             return .exactUSD(value)
+        case "estimatedUSD":
+            guard let value else {
+                throw SnapshotRepositoryError.corruptCostDisplay(kind)
+            }
+            return .estimatedUSD(value)
         case "includedWithPlan":
             return .includedWithPlan
         case "unavailable":

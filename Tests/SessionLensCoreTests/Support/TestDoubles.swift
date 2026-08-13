@@ -145,3 +145,25 @@ struct FakeCodexClient: CodexAccountReading {
         return rateLimits
     }
 }
+
+final class FakeClaudeBridgeStore: ClaudeCacheStoring, @unchecked Sendable {
+    private let lock = NSLock()
+    private var caches: [ClaudeNormalizedCache?]
+
+    init(caches: [ClaudeNormalizedCache?]) {
+        self.caches = caches
+    }
+
+    func read() throws -> ClaudeNormalizedCache? {
+        lock.withLock {
+            guard !caches.isEmpty else { return nil }
+            return caches.removeFirst()
+        }
+    }
+
+    func write(_ cache: ClaudeNormalizedCache) throws {
+        lock.withLock {
+            caches.append(cache)
+        }
+    }
+}

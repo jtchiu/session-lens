@@ -6,6 +6,19 @@ import Testing
 @Suite
 @MainActor
 struct SnapshotRepositoryTests {
+    @Test @MainActor
+    func repositoryPreservesEstimatedCostProvenance() throws {
+        let repository = try SnapshotRepository.inMemory()
+        let snapshot = Fixtures.aggregateSnapshot(
+            provider: .claude,
+            costDisplay: .estimatedUSD(0.42)
+        )
+
+        try repository.record(snapshot)
+
+        #expect(try repository.latest(provider: .claude)?.costDisplay == .estimatedUSD(0.42))
+    }
+
   @Test
   func repositoryRoundTripsOnlyNormalizedSnapshot() throws {
     let repository = try SnapshotRepository.inMemory()

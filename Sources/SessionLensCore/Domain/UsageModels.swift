@@ -21,6 +21,7 @@ public enum ProviderHealth: String, Codable, Hashable, Sendable {
 
 public enum CostDisplay: Codable, Hashable, Sendable {
     case exactUSD(Double)
+    case estimatedUSD(Double)
     case includedWithPlan
     case unavailable
 }
@@ -171,8 +172,10 @@ public struct ProviderSnapshot: Codable, Hashable, Sendable, Identifiable {
     public var id: ProviderID { provider }
 
     public var costUSD: Double? {
-        guard case let .exactUSD(value) = costDisplay else { return nil }
-        return value
+        switch costDisplay {
+        case let .exactUSD(value), let .estimatedUSD(value): value
+        case .includedWithPlan, .unavailable: nil
+        }
     }
 
     public var primaryQuota: QuotaWindow? { quotaWindows.first }

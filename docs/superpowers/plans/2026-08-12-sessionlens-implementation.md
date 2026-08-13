@@ -53,7 +53,7 @@
 - `Sources/SessionLensCore/Providers/Codex/CodexProvider.swift` — account response normalization.
 - `Sources/SessionLensCore/Providers/Claude/ClaudeStatusPayload.swift` — official status-line allowlist DTOs.
 - `Sources/SessionLensCore/Providers/Claude/ClaudeBridgeStore.swift` — atomic normalized cache read/write.
-- `Sources/SessionLensCore/Providers/Claude/ClaudeProvider.swift` — bridge-cache normalization and deltas.
+- `Sources/SessionLensCore/Providers/Claude/ClaudeProvider.swift` — bridge-cache normalization, freshness, and live-context semantics.
 - `Sources/SessionLensCore/Providers/Claude/ClaudeBridgeInstaller.swift` — reversible status-line wrapper installation.
 - `Sources/SessionLensClaudeBridge/main.swift` — helper stdin allowlist, atomic cache write, and prior-command forwarding.
 
@@ -789,6 +789,8 @@ git commit -m "feat: normalize Codex quota and usage"
 - Consumes: domain models and file-system/process seams.
 - Produces: `ClaudeStatusPayload`, `ClaudeNormalizedCache`, `ClaudeBridgeStore`, `ClaudeProvider`, and the bridge executable.
 
+Protocol note verified against Anthropic's current status-line documentation: `cost.total_cost_usd` is an estimated cumulative session value, while `context_window` token counts describe the live context from the most recent API response. The adapter must not difference context tokens into fake spend history.
+
 - [ ] **Step 1: Write failing allowlist and delta tests**
 
 ```swift
@@ -802,12 +804,12 @@ func testStatusPayloadDecodingCannotRepresentSensitiveFields() throws {
     }
 }
 
-func testCumulativeCountersBecomeNonNegativeDeltas() async {
+func testLiveContextTokensAreNotMisrepresentedAsCumulativeDeltas() async {
     let store = FakeClaudeBridgeStore(caches: [Fixtures.claudeCache(tokens: 100), Fixtures.claudeCache(tokens: 140)])
     let provider = ClaudeProvider(store: store)
     _ = await provider.refresh(at: Fixtures.now)
     let second = await provider.refresh(at: Fixtures.now.addingTimeInterval(60))
-    XCTAssertEqual(second.tokens?.total, 40)
+    XCTAssertEqual(second.tokens?.total, 140)
 }
 ```
 
@@ -821,7 +823,7 @@ Expected: FAIL because the Claude payload and bridge store are undefined.
 
 `ClaudeStatusPayload.CodingKeys` may contain only `session_id`, `model`, `cost`, `context_window`, `rate_limits`, and `version`. Normalize the session ID to `SHA256` using CryptoKit and discard the original string. Define `ClaudeCacheStoring` with `read() throws -> ClaudeNormalizedCache?` and `write(_:) throws`; both the live and fake stores conform.
 
-Write cache data atomically to `~/Library/Application Support/SessionLens/Bridge/claude-usage.json`, create the directory with mode `0700`, and set the file to `0600`. `ClaudeProvider` must mark snapshots stale after five minutes and handle counter resets by starting a new baseline rather than emitting negative usage.
+Write cache data atomically to `~/Library/Application Support/SessionLens/Bridge/claude-usage.json`, create the directory with mode `0700`, and set the file to `0600`. `ClaudeProvider` must mark snapshots stale after five minutes, expose live-context tokens without differencing, classify session cost as estimated, and treat a lower/new-session cost as a fresh cumulative value rather than emitting a negative metric. It must not create Claude daily token buckets from status-line context counts.
 
 - [ ] **Step 4: Implement the bridge executable and forwarding test**
 
@@ -1408,7 +1410,7 @@ Record the real OpenCode database modification timestamp, refresh SessionLens, a
 
 - [ ] **Step 4: Verify Claude synthetic integration and live status honestly**
 
-Feed an official-shaped synthetic status-line payload through the packaged helper and confirm the cache contains only allowlisted keys, the app updates exact quotas/tokens/cost, and an existing synthetic status-line command receives the original input and returns its output. If `claude` remains unavailable locally, write `Live Claude CLI: not installed; synthetic official-payload integration passed` in the report.
+Feed an official-shaped synthetic status-line payload through the packaged helper and confirm the cache contains only allowlisted keys, the app updates exact quotas, live-context tokens, and estimated session cost, and an existing synthetic status-line command receives the original input and returns its output. If `claude` remains unavailable locally, write `Live Claude CLI: not installed; synthetic official-payload integration passed` in the report.
 
 - [ ] **Step 5: Verify notifications and failure states**
 
