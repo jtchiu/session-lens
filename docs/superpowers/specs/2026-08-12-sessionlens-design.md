@@ -170,7 +170,7 @@ OpenCode does not own a universal quota because it can route through many provid
 
 ## 7. Persistence
 
-SwiftData stores normalized aggregate records in the app's Application Support directory.
+Programmatic Core Data stores normalized aggregate records in a local SQLite store in the app's Application Support directory. The model is code-defined so the free SwiftPM build works with Command Line Tools alone; no full Xcode installation is required.
 
 Persisted entities are:
 

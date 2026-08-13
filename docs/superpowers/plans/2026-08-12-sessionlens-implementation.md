@@ -6,7 +6,7 @@
 
 **Architecture:** A SwiftPM workspace contains a testable `SessionLensCore` library, the SwiftUI `SessionLens` menu-bar executable, and a narrow `SessionLensClaudeBridge` helper. Provider adapters normalize allowlisted local data into immutable snapshots, an actor coordinates refresh and persistence, and SwiftUI renders the same domain model without provider-specific parsing.
 
-**Tech Stack:** Swift 6.3, SwiftUI, Swift Charts, SwiftData, AppKit, ServiceManagement, UserNotifications, CryptoKit, Foundation `Process`, XCTest, Swift Package Manager, `/usr/bin/sqlite3`, ImageGen, and native macOS visual QA.
+**Tech Stack:** Swift 6.3, SwiftUI, Swift Charts, programmatic Core Data, AppKit, ServiceManagement, UserNotifications, CryptoKit, Foundation `Process`, Swift Testing, Swift Package Manager, `/usr/bin/sqlite3`, ImageGen, and native macOS visual QA.
 
 ## Global Constraints
 
@@ -40,7 +40,7 @@
 - `Sources/SessionLensCore/Domain/UsageModels.swift` — snapshots, quota windows, tokens, buckets, provenance, and health.
 - `Sources/SessionLensCore/Infrastructure/ExecutableLocator.swift` — bounded executable discovery.
 - `Sources/SessionLensCore/Infrastructure/ProcessRunner.swift` — timeout-aware subprocess abstraction.
-- `Sources/SessionLensCore/Persistence/PersistenceModels.swift` — SwiftData aggregate records.
+- `Sources/SessionLensCore/Persistence/PersistenceModels.swift` — programmatic Core Data aggregate records.
 - `Sources/SessionLensCore/Persistence/SnapshotRepository.swift` — persistence, retention, and history clearing.
 
 ### Provider adapters
@@ -463,7 +463,7 @@ git commit -m "feat: isolate provider subprocesses"
 
 ---
 
-### Task 4: Persist normalized aggregate history with SwiftData
+### Task 4: Persist normalized aggregate history with Core Data
 
 **Files:**
 - Create: `Sources/SessionLensCore/Persistence/PersistenceModels.swift`
@@ -499,13 +499,13 @@ Run: `swift test --filter SnapshotRepositoryTests`
 
 Expected: FAIL because `SnapshotRepository` is undefined.
 
-- [ ] **Step 3: Implement aggregate-only SwiftData records**
+- [ ] **Step 3: Implement aggregate-only Core Data records**
 
-Use separate `@Model` classes with no generic raw-provider payload field:
+Use separate `NSManagedObject` classes with a programmatic `NSManagedObjectModel` and no generic raw-provider payload field. This preserves a native SQLite-backed store while remaining buildable with Command Line Tools, whose SwiftData SDK omits the `SwiftDataMacros` compiler plugin.
 
 ```swift
-@Model final class SnapshotRecord {
-    @Attribute(.unique) var key: String
+final class SnapshotRecord: NSManagedObject {
+    @NSManaged var key: String
     var providerRaw: String
     var observedAt: Date
     var healthRaw: String
@@ -515,7 +515,7 @@ Use separate `@Model` classes with no generic raw-provider payload field:
 }
 ```
 
-Encode only normalized `TokenBreakdown` and `[QuotaWindow]`. Add `DailyUsageRecord`, `NotificationRecord`, and `SettingsRecord`. Configure in-memory tests with `ModelConfiguration(isStoredInMemoryOnly: true)`.
+Encode only normalized `TokenBreakdown` and `[QuotaWindow]`. Add `DailyUsageRecord`, `NotificationRecord`, and `SettingsRecord`. Configure tests with an `NSInMemoryStoreType` persistent store and production with an `NSSQLiteStoreType` store under Application Support.
 
 - [ ] **Step 4: Run focused and cumulative tests**
 

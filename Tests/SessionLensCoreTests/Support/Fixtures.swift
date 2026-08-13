@@ -33,6 +33,7 @@ enum Fixtures {
 
     static func aggregateSnapshot(
         provider: ProviderID,
+        observedAt: Date = now,
         tokens: TokenBreakdown = .init(
             input: 100,
             output: 50,
@@ -41,19 +42,29 @@ enum Fixtures {
             cacheWrite: 5
         ),
         costDisplay: CostDisplay = .exactUSD(1.25),
-        quotaWindows: [QuotaWindow] = []
+        quotaWindows: [QuotaWindow] = [],
+        dailyBuckets: [UsageBucket]? = nil
     ) -> ProviderSnapshot {
         ProviderSnapshot(
             provider: provider,
-            observedAt: now,
+            observedAt: observedAt,
             health: .ready,
             tokens: tokens,
             costDisplay: costDisplay,
-            dailyBuckets: [
+            dailyBuckets: dailyBuckets ?? [
                 UsageBucket(day: day(0), tokens: tokens.total, costUSD: 1.25),
             ],
             quotaWindows: quotaWindows,
             modelBreakdowns: []
+        )
+    }
+
+    static func codexSnapshot(observedAt: Date = now) -> ProviderSnapshot {
+        aggregateSnapshot(
+            provider: .codex,
+            observedAt: observedAt,
+            costDisplay: .includedWithPlan,
+            quotaWindows: [quota(36)]
         )
     }
 }
