@@ -3,6 +3,36 @@ import Foundation
 
 enum Fixtures {
     static let now = Date(timeIntervalSince1970: 1_735_689_600)
+    static let openCodeDatabaseURL = URL(fileURLWithPath: "/dev/null")
+    static let sqliteURL = URL(fileURLWithPath: "/usr/bin/sqlite3")
+    static let openCodeRowsJSON = Data(
+        #"""
+        [
+          {
+            "day": "2025-01-01",
+            "provider_id": "openai",
+            "model_id": "gpt-5",
+            "cost": 0.5,
+            "tokens_input": 1000,
+            "tokens_output": 500,
+            "tokens_reasoning": 100,
+            "tokens_cache_read": 200,
+            "tokens_cache_write": 100
+          },
+          {
+            "day": "2025-01-02",
+            "provider_id": "openai",
+            "model_id": "gpt-5",
+            "cost": 0.75,
+            "tokens_input": 1500,
+            "tokens_output": 400,
+            "tokens_reasoning": 100,
+            "tokens_cache_read": 200,
+            "tokens_cache_write": 100
+          }
+        ]
+        """#.utf8
+    )
 
     static func day(_ offset: Int) -> Date {
         Calendar.utc.date(byAdding: .day, value: offset, to: now)!

@@ -21,3 +21,33 @@ final class FakeExecutableFileSystem: ExecutableFileSystem, @unchecked Sendable 
         }
     }
 }
+
+actor FakeProcessRunner: ProcessExecuting {
+    private let result: ProcessResult
+    private var recordedRequests: [ProcessRequest] = []
+
+    init(
+        stdout: Data = Data(),
+        stderr: Data = Data(),
+        exitCode: Int32 = 0
+    ) {
+        self.result = ProcessResult(
+            stdout: stdout,
+            stderr: stderr,
+            termination: .exited(exitCode)
+        )
+    }
+
+    init(result: ProcessResult) {
+        self.result = result
+    }
+
+    func run(_ request: ProcessRequest) async -> ProcessResult {
+        recordedRequests.append(request)
+        return result
+    }
+
+    func requests() -> [ProcessRequest] {
+        recordedRequests
+    }
+}
