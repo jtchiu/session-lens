@@ -3,33 +3,40 @@ import SwiftUI
 @main
 @MainActor
 struct SessionLensApp: App {
-    @StateObject private var model: AppModel
+  @StateObject private var model: AppModel
 
-    init() {
-        let visualFixtureMode = ProcessInfo.processInfo.arguments.contains(
-            "--visual-fixtures"
-        )
-        let selectedModel: AppModel = visualFixtureMode
-            ? .visualFixtures()
-            : .live()
-        _model = StateObject(
-            wrappedValue: selectedModel
-        )
-#if DEBUG
-        if visualFixtureMode {
-            DispatchQueue.main.async {
-                VisualPreviewWindowController.shared.show(model: selectedModel)
-            }
+  init() {
+    let visualFixtureMode = ProcessInfo.processInfo.arguments.contains(
+      "--visual-fixtures"
+    )
+    let selectedModel: AppModel =
+      visualFixtureMode
+      ? .visualFixtures()
+      : .live()
+    _model = StateObject(
+      wrappedValue: selectedModel
+    )
+    #if DEBUG
+      if visualFixtureMode {
+        DispatchQueue.main.async {
+          VisualPreviewWindowController.shared.show(model: selectedModel)
         }
-#endif
-    }
+      }
+    #endif
+  }
 
-    var body: some Scene {
-        MenuBarExtra {
-            PopoverView(model: model)
-        } label: {
-            MenuBarLabel(summary: model.menuBarSummary)
-        }
-        .menuBarExtraStyle(.window)
+  var body: some Scene {
+    MenuBarExtra {
+      PopoverView(model: model)
+    } label: {
+      MenuBarLabel(summary: model.menuBarSummary)
     }
+    .menuBarExtraStyle(.window)
+
+    Settings {
+      SettingsView(model: model)
+    }
+    .defaultSize(width: 760, height: 560)
+    .windowResizability(.contentSize)
+  }
 }
