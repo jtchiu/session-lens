@@ -12,17 +12,14 @@ test -f "$app_path/Contents/Info.plist"
 test -f "$app_path/Contents/Resources/SessionLens.icns"
 /usr/bin/plutil -lint "$app_path/Contents/Info.plist" >/dev/null
 
-# Finder/FileProvider can attach these attributes to an app copied into a
-# synced Documents folder. They are not part of the signed bundle contents.
-for sessionlens_attribute in \
-  com.apple.FinderInfo \
-  com.apple.fileprovider.fpfs#P \
-  com.apple.provenance \
-  com.apple.quarantine \
-  com.apple.ResourceFork; do
-  /usr/bin/xattr -d "$sessionlens_attribute" "$app_path" 2>/dev/null || true
-done
-
-/usr/bin/codesign --verify --deep --strict "$app_path"
+# Finder/FileProvider can attach metadata to an app copied into a synced
+# Documents folder. Verify the exact signed contents from a metadata-free copy
+# so the check stays read-only and is not racy with the host's file provider.
+verification_directory="$(mktemp -d "${TMPDIR:-/tmp}/sessionlens-verify.XXXXXX")"
+trap 'rm -rf -- "$verification_directory"' EXIT
+verification_app="$verification_directory/SessionLens.app"
+/usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
+  "$app_path" "$verification_app"
+/usr/bin/codesign --verify --deep --strict "$verification_app"
 
 print "PASS: $app_path"
