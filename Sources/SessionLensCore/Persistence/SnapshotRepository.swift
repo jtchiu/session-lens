@@ -12,6 +12,13 @@ public protocol SnapshotPersisting: Sendable {
     func record(_ snapshot: ProviderSnapshot) throws
     func saveSettings(_ settings: AppSettings) throws
     func loadSettings() throws -> AppSettings?
+    func prune(now: Date, historyRetentionDays: Int) throws
+}
+
+public extension SnapshotPersisting {
+    func prune(now: Date) throws {
+        try prune(now: now, historyRetentionDays: AppSettings.defaults.historyRetentionDays)
+    }
 }
 
 @MainActor
@@ -156,6 +163,16 @@ public final class SnapshotRepository: SnapshotPersisting {
         )
     }
 
+    public func latestSnapshots() throws -> [ProviderID: ProviderSnapshot] {
+        var snapshots: [ProviderID: ProviderSnapshot] = [:]
+        for provider in ProviderID.allCases {
+            if let snapshot = try latest(provider: provider) {
+                snapshots[provider] = snapshot
+            }
+        }
+        return snapshots
+    }
+
     public func dailyUsage(
         provider: ProviderID,
         range: ClosedRange<Date>
@@ -224,11 +241,25 @@ public final class SnapshotRepository: SnapshotPersisting {
         try fetchNotification(key: key) != nil
     }
 
-    public func prune(now: Date) throws {
+    public func prune(now: Date, historyRetentionDays: Int) throws {
         let calendar = Calendar(identifier: .gregorian)
+        let normalizedRetention = min(3_650, max(7, historyRetentionDays))
         guard
-            let snapshotCutoff = calendar.date(byAdding: .day, value: -90, to: now),
-            let dailyCutoff = calendar.date(byAdding: .day, value: -365, to: now)
+            let snapshotCutoff = calendar.date(
+                byAdding: .day,
+                value: -min(90, normalizedRetention),
+                to: now
+            ),
+            let dailyCutoff = calendar.date(
+                byAdding: .day,
+                value: -normalizedRetention,
+                to: now
+            ),
+            let notificationCutoff = calendar.date(
+                byAdding: .day,
+                value: -normalizedRetention,
+                to: now
+            )
         else {
             return
         }
@@ -243,6 +274,13 @@ public final class SnapshotRepository: SnapshotPersisting {
         try delete(
             DailyUsageRecord.fetchRequest(),
             matching: NSPredicate(format: "day < %@", dailyCutoff as NSDate)
+        )
+        try delete(
+            NotificationRecord.fetchRequest(),
+            matching: NSPredicate(
+                format: "createdAt < %@",
+                notificationCutoff as NSDate
+            )
         )
         try context.save()
     }

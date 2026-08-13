@@ -23,7 +23,7 @@ final class FakeExecutableFileSystem: ExecutableFileSystem, @unchecked Sendable 
 }
 
 actor FakeProcessRunner: ProcessExecuting {
-    private let result: ProcessResult
+    private var results: [ProcessResult]
     private var recordedRequests: [ProcessRequest] = []
 
     init(
@@ -31,20 +31,27 @@ actor FakeProcessRunner: ProcessExecuting {
         stderr: Data = Data(),
         exitCode: Int32 = 0
     ) {
-        self.result = ProcessResult(
+        self.results = [ProcessResult(
             stdout: stdout,
             stderr: stderr,
             termination: .exited(exitCode)
-        )
+        )]
     }
 
     init(result: ProcessResult) {
-        self.result = result
+        self.results = [result]
+    }
+
+    init(results: [ProcessResult]) {
+        self.results = results
     }
 
     func run(_ request: ProcessRequest) async -> ProcessResult {
         recordedRequests.append(request)
-        return result
+        if results.count > 1 {
+            return results.removeFirst()
+        }
+        return results[0]
     }
 
     func requests() -> [ProcessRequest] {

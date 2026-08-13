@@ -5,6 +5,68 @@ import Testing
 @Suite
 struct MenuBarSummaryTests {
     @Test
+    func urgentModePrioritizesFiveHourWindowOverMoreDepletedWeeklyWindow() {
+        let snapshot = Fixtures.aggregateSnapshot(
+            provider: .codex,
+            costDisplay: .includedWithPlan,
+            quotaWindows: [
+                QuotaWindow(
+                    id: "codex:300",
+                    label: "5-hour",
+                    durationMinutes: 300,
+                    usedPercent: 35,
+                    resetsAt: Fixtures.day(0).addingTimeInterval(3_600),
+                    provenance: .exactProvider
+                ),
+                QuotaWindow(
+                    id: "codex:10080",
+                    label: "Weekly",
+                    durationMinutes: 10_080,
+                    usedPercent: 82,
+                    resetsAt: Fixtures.day(7),
+                    provenance: .exactProvider
+                ),
+            ]
+        )
+
+        let summary = MenuBarSummary.make(
+            mode: .urgent,
+            snapshots: [snapshot],
+            providerOrder: [.codex]
+        )
+
+        #expect(summary.text == "CX 65%")
+        #expect(summary.accessibilityLabel.contains("5-hour"))
+    }
+
+    @Test
+    func urgentModeFallsBackToWeeklyWhenFiveHourWindowIsAbsent() {
+        let snapshot = Fixtures.aggregateSnapshot(
+            provider: .codex,
+            costDisplay: .includedWithPlan,
+            quotaWindows: [
+                QuotaWindow(
+                    id: "codex:10080",
+                    label: "Weekly",
+                    durationMinutes: 10_080,
+                    usedPercent: 82,
+                    resetsAt: Fixtures.day(7),
+                    provenance: .exactProvider
+                ),
+            ]
+        )
+
+        let summary = MenuBarSummary.make(
+            mode: .urgent,
+            snapshots: [snapshot],
+            providerOrder: [.codex]
+        )
+
+        #expect(summary.text == "CX 18%")
+        #expect(summary.accessibilityLabel.contains("Weekly"))
+    }
+
+    @Test
     func urgentModeChoosesHighestExactQuotaAheadOfLocalBudget() {
         let summary = MenuBarSummary.make(
             mode: .urgent,
@@ -15,8 +77,9 @@ struct MenuBarSummaryTests {
             providerOrder: [.opencode, .claude, .codex]
         )
 
-        #expect(summary.text == "CX 72%")
+        #expect(summary.text == "CX 28%")
         #expect(summary.severity == .warning)
+        #expect(summary.accessibilityLabel.contains("28 percent remaining"))
     }
 
     @Test
@@ -27,7 +90,7 @@ struct MenuBarSummaryTests {
             providerOrder: ProviderID.allCases
         )
 
-        #expect(summary.text == "OC 91%")
+        #expect(summary.text == "OC 9%")
         #expect(summary.severity == .critical)
         #expect(summary.accessibilityLabel.contains("Local budget"))
     }
@@ -75,7 +138,7 @@ struct MenuBarSummaryTests {
             providerOrder: ProviderID.allCases
         )
 
-        #expect(summary.text == "CX 36%")
+        #expect(summary.text == "CX 64%")
         #expect(summary.accessibilityLabel.contains("Codex"))
     }
 
@@ -116,7 +179,7 @@ struct MenuBarSummaryTests {
             providerOrder: [.claude, .codex, .opencode]
         )
 
-        #expect(summary.text == "CL 70%")
+        #expect(summary.text == "CL 30%")
     }
 
     @Test

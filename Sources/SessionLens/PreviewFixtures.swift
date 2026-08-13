@@ -5,7 +5,7 @@ enum PreviewFixtures {
     private static let now = Date()
 
     static let settings = AppSettings(
-        refreshIntervalSeconds: 300,
+        refreshIntervalSeconds: 60,
         chartRange: .sevenDays,
         providerOrder: [.opencode, .claude, .codex],
         notificationThresholds: [70, 90],
@@ -28,7 +28,32 @@ enum PreviewFixtures {
             costDisplay: .exactUSD(4.82),
             dailyBuckets: dailyBuckets(scale: 0.72, costScale: 0.55),
             quotaWindows: [],
-            modelBreakdowns: []
+            modelBreakdowns: [
+                ModelUsage(
+                    providerID: "openai",
+                    modelID: "gpt-5",
+                    tokens: TokenBreakdown(
+                        input: 104_000,
+                        output: 22_000,
+                        reasoning: 8_000,
+                        cacheRead: 32_000,
+                        cacheWrite: 2_000
+                    ),
+                    costUSD: 2.40
+                ),
+                ModelUsage(
+                    providerID: "anthropic",
+                    modelID: "claude-sonnet",
+                    tokens: TokenBreakdown(
+                        input: 82_000,
+                        output: 19_800,
+                        reasoning: 4_400,
+                        cacheRead: 60_000,
+                        cacheWrite: 6_400
+                    ),
+                    costUSD: 2.42
+                ),
+            ]
         ),
         .claude: .unavailable(
             provider: .claude,

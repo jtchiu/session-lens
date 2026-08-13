@@ -8,13 +8,16 @@ public protocol ClaudeCacheStoring: Sendable {
 public struct ClaudeBridgeConfiguration: Codable, Equatable, Sendable {
     public let previousCommand: String?
     public let installedStatusLineChecksum: String?
+    public let helperChecksum: String?
 
     public init(
         previousCommand: String?,
-        installedStatusLineChecksum: String? = nil
+        installedStatusLineChecksum: String? = nil,
+        helperChecksum: String? = nil
     ) {
         self.previousCommand = previousCommand
         self.installedStatusLineChecksum = installedStatusLineChecksum
+        self.helperChecksum = helperChecksum
     }
 }
 
@@ -65,6 +68,17 @@ public struct ClaudeBridgeStore: ClaudeCacheStoring, @unchecked Sendable {
             [.posixPermissions: 0o600],
             ofItemAtPath: cacheURL.path
         )
+    }
+}
+
+public enum ClaudeBridgePipeline {
+    public static func captureAndForward(
+        input: Data,
+        capture: @escaping @Sendable (Data) throws -> Void,
+        forward: @escaping @Sendable () async throws -> Data
+    ) async -> Data {
+        try? capture(input)
+        return (try? await forward()) ?? Data()
     }
 }
 

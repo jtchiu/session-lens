@@ -15,6 +15,38 @@ public enum MenuBarDisplayMode: String, CaseIterable, Codable, Hashable, Sendabl
     case minimal
 }
 
+public struct OpenCodeLocalBudget: Codable, Equatable, Hashable, Sendable {
+    public var fiveHourUSD: Double?
+    public var weeklyUSD: Double?
+
+    public init(fiveHourUSD: Double? = nil, weeklyUSD: Double? = nil) {
+        self.fiveHourUSD = Self.normalized(fiveHourUSD)
+        self.weeklyUSD = Self.normalized(weeklyUSD)
+    }
+
+    public var isEmpty: Bool {
+        fiveHourUSD == nil && weeklyUSD == nil
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case fiveHourUSD
+        case weeklyUSD
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            fiveHourUSD: try container.decodeIfPresent(Double.self, forKey: .fiveHourUSD),
+            weeklyUSD: try container.decodeIfPresent(Double.self, forKey: .weeklyUSD)
+        )
+    }
+
+    private static func normalized(_ value: Double?) -> Double? {
+        guard let value, value.isFinite, value > 0 else { return nil }
+        return value
+    }
+}
+
 public struct AppSettings: Codable, Equatable, Sendable {
     public static let defaults = AppSettings()
 
@@ -29,9 +61,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var launchAtLogin: Bool
 
     private var openCodeQuotaMappings: [String: ProviderID]
+    private var openCodeLocalBudgets: [String: OpenCodeLocalBudget]
 
     public init(
-        refreshIntervalSeconds: Int = 300,
+        refreshIntervalSeconds: Int = 60,
         chartRange: UsageChartRange = .sevenDays,
         providerOrder: [ProviderID] = ProviderID.allCases,
         notificationThresholds: [Int] = [70, 90],
@@ -40,7 +73,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         notificationsEnabled: Bool = false,
         notifyOnReset: Bool = true,
         launchAtLogin: Bool = false,
-        openCodeQuotaMappings: [String: ProviderID] = [:]
+        openCodeQuotaMappings: [String: ProviderID] = [:],
+        openCodeLocalBudgets: [String: OpenCodeLocalBudget] = [:]
     ) {
         self.refreshIntervalSeconds = min(3_600, max(30, refreshIntervalSeconds))
         self.chartRange = chartRange
@@ -56,6 +90,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.openCodeQuotaMappings = Self.normalizedMappings(
             openCodeQuotaMappings
         )
+        self.openCodeLocalBudgets = Self.normalizedBudgets(openCodeLocalBudgets)
     }
 
     public func quotaProvider(
@@ -84,6 +119,28 @@ public struct AppSettings: Codable, Equatable, Sendable {
         openCodeQuotaMappings
     }
 
+    public func localBudget(
+        forOpenCodeProviderID providerID: String
+    ) -> OpenCodeLocalBudget? {
+        openCodeLocalBudgets[providerID]
+    }
+
+    public mutating func setLocalBudget(
+        _ budget: OpenCodeLocalBudget?,
+        forOpenCodeProviderID providerID: String
+    ) {
+        guard !providerID.isEmpty else { return }
+        guard let budget, !budget.isEmpty else {
+            openCodeLocalBudgets.removeValue(forKey: providerID)
+            return
+        }
+        openCodeLocalBudgets[providerID] = budget
+    }
+
+    public var localBudgets: [String: OpenCodeLocalBudget] {
+        openCodeLocalBudgets
+    }
+
     private enum CodingKeys: String, CodingKey {
         case refreshIntervalSeconds
         case chartRange
@@ -95,6 +152,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         case notifyOnReset
         case launchAtLogin
         case openCodeQuotaMappings
+        case openCodeLocalBudgets
     }
 
     public init(from decoder: Decoder) throws {
@@ -139,6 +197,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
             openCodeQuotaMappings: try container.decodeIfPresent(
                 [String: ProviderID].self,
                 forKey: .openCodeQuotaMappings
+            ) ?? [:],
+            openCodeLocalBudgets: try container.decodeIfPresent(
+                [String: OpenCodeLocalBudget].self,
+                forKey: .openCodeLocalBudgets
             ) ?? [:]
         )
     }
@@ -158,5 +220,17 @@ public struct AppSettings: Codable, Equatable, Sendable {
         mappings.filter { key, value in
             !key.isEmpty && (value == .claude || value == .codex)
         }
+    }
+
+    private static func normalizedBudgets(
+        _ budgets: [String: OpenCodeLocalBudget]
+    ) -> [String: OpenCodeLocalBudget] {
+        budgets.compactMapValues { budget in
+            let normalized = OpenCodeLocalBudget(
+                fiveHourUSD: budget.fiveHourUSD,
+                weeklyUSD: budget.weeklyUSD
+            )
+            return normalized.isEmpty ? nil : normalized
+        }.filter { !$0.key.isEmpty }
     }
 }

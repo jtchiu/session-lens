@@ -80,6 +80,39 @@ struct SnapshotRepositoryTests {
   }
 
   @Test
+  func pruneHonorsConfiguredRetentionAndDropsOldNotificationKeys() throws {
+    let repository = try SnapshotRepository.inMemory()
+    let now = Fixtures.day(100)
+    try repository.record(
+      Fixtures.aggregateSnapshot(
+        provider: .codex,
+        observedAt: Fixtures.day(80),
+        dailyBuckets: [
+          UsageBucket(day: Fixtures.day(80), tokens: 80, costUSD: nil)
+        ]
+      )
+    )
+    try repository.record(
+      Fixtures.aggregateSnapshot(
+        provider: .codex,
+        observedAt: Fixtures.day(95),
+        dailyBuckets: [
+          UsageBucket(day: Fixtures.day(95), tokens: 95, costUSD: nil)
+        ]
+      )
+    )
+    try repository.markNotification("old", at: Fixtures.day(80))
+    try repository.markNotification("new", at: Fixtures.day(95))
+
+    try repository.prune(now: now, historyRetentionDays: 10)
+
+    #expect(try repository.snapshotRecordCount() == 1)
+    #expect(try repository.dailyUsageRecordCount() == 1)
+    #expect(!(try repository.hasNotification("old")))
+    #expect(try repository.hasNotification("new"))
+  }
+
+  @Test
   func dailyUsageReturnsOnlyRequestedProviderAndRange() throws {
     let repository = try SnapshotRepository.inMemory()
     try repository.record(

@@ -96,14 +96,14 @@ public struct MenuBarSummary: Equatable, Hashable, Sendable {
                 severity: .muted
             )
         }
-        let rounded = Int(selected.percent.rounded())
+        let rounded = Int((selected.window.remainingPercent ?? 0).rounded())
         let provenance = selected.window.provenance == .localBudget
             ? "Local budget"
             : "Exact provider quota"
         return MenuBarSummary(
             text: "\(selected.provider.abbreviation) \(rounded)%",
             accessibilityLabel:
-                "SessionLens, \(selected.provider.displayName), \(selected.window.label), \(rounded) percent, \(provenance)",
+                "SessionLens, \(selected.provider.displayName), \(selected.window.label), \(rounded) percent remaining, \(provenance)",
             severity: severity(for: selected.percent)
         )
     }
@@ -144,15 +144,23 @@ public struct MenuBarSummary: Equatable, Hashable, Sendable {
                 severity: .muted
             )
         }
-        if let window = selected.quotaWindows.first(where: {
-            ($0.provenance == .exactProvider || $0.provenance == .localBudget)
-                && $0.usedPercent != nil
-        }), let percent = window.usedPercent {
-            let rounded = Int(percent.rounded())
+        if let window = (
+            selected.quotaWindows
+                .filter { window in
+                    (window.provenance == .exactProvider || window.provenance == .localBudget)
+                        && window.usedPercent != nil
+                }
+                .sorted(by: preferredWindow)
+                .first
+        ),
+            let percent = window.usedPercent,
+            let remaining = window.remainingPercent
+        {
+            let rounded = Int(remaining.rounded())
             return MenuBarSummary(
                 text: "\(selected.provider.abbreviation) \(rounded)%",
                 accessibilityLabel:
-                    "SessionLens, \(selected.provider.displayName), \(window.label), \(rounded) percent",
+                    "SessionLens, \(selected.provider.displayName), \(window.label), \(rounded) percent remaining",
                 severity: severity(for: percent)
             )
         }
@@ -196,11 +204,42 @@ public struct MenuBarSummary: Equatable, Hashable, Sendable {
                 )
             }
         }.sorted { left, right in
+            let leftPriority = windowPriority(left.window)
+            let rightPriority = windowPriority(right.window)
+            if leftPriority != rightPriority {
+                return leftPriority < rightPriority
+            }
             if left.percent != right.percent {
                 return left.percent > right.percent
             }
             return (orderIndex[left.provider] ?? Int.max)
                 < (orderIndex[right.provider] ?? Int.max)
+        }
+    }
+
+    private static func preferredWindow(_ left: QuotaWindow, _ right: QuotaWindow) -> Bool {
+        let leftPriority = windowPriority(left)
+        let rightPriority = windowPriority(right)
+        if leftPriority != rightPriority {
+            return leftPriority < rightPriority
+        }
+
+        let leftDuration = left.durationMinutes ?? Int.max
+        let rightDuration = right.durationMinutes ?? Int.max
+        if leftDuration != rightDuration {
+            return leftDuration < rightDuration
+        }
+        return (left.resetsAt ?? .distantFuture) < (right.resetsAt ?? .distantFuture)
+    }
+
+    private static func windowPriority(_ window: QuotaWindow) -> Int {
+        switch window.durationMinutes {
+        case 300:
+            0
+        case 10_080:
+            1
+        default:
+            2
         }
     }
 

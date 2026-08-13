@@ -11,7 +11,7 @@ struct UsageRateChart: View {
     var body: some View {
         VStack(alignment: .leading, spacing: SessionLensSpacing.xSmall) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Usage Rate")
+                Text("Quota Remaining")
                     .font(.system(size: 13, weight: .semibold))
                 Spacer()
                 Text("of weekly limit")
@@ -23,7 +23,7 @@ struct UsageRateChart: View {
                 Chart(points) { point in
                     AreaMark(
                         x: .value("Time", point.observedAt),
-                        y: .value("Used", point.usedPercent)
+                        y: .value("Remaining", point.remainingPercent)
                     )
                     .foregroundStyle(
                         LinearGradient(
@@ -36,7 +36,7 @@ struct UsageRateChart: View {
 
                     LineMark(
                         x: .value("Time", point.observedAt),
-                        y: .value("Used", point.usedPercent)
+                        y: .value("Remaining", point.remainingPercent)
                     )
                     .foregroundStyle(accent)
                     .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
@@ -72,7 +72,7 @@ struct UsageRateChart: View {
                 }
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Usage rate for \(provider.displayName)")
+            .accessibilityLabel("Quota remaining for \(provider.displayName)")
             .accessibilityValue(accessibilityValue)
         }
     }
@@ -83,7 +83,7 @@ struct UsageRateChart: View {
 
     private var accessibilityValue: String {
         guard let latest = points.last else { return "Insufficient history" }
-        return "Latest value \(Int(latest.usedPercent.rounded())) percent"
+        return "Latest value \(Int(latest.remainingPercent.rounded())) percent remaining"
     }
 }
 

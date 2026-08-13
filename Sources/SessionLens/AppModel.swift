@@ -13,6 +13,7 @@ final class AppModel: ObservableObject {
   @Published private(set) var settings: AppSettings
   @Published private(set) var claudeBridgeStatus: ClaudeBridgeInstallStatus
   @Published private(set) var launchAtLoginStatus: LaunchAtLoginStatus
+  @Published private(set) var notificationPermissionStatus: NotificationPermissionStatus
   @Published private(set) var errorMessage: String?
 
   private let coordinator: UsageCoordinator
@@ -52,6 +53,7 @@ final class AppModel: ObservableObject {
     self.launchAtLoginController = launchAtLoginController
     self.claudeBridgeStatus = initialClaudeBridgeStatus
     self.launchAtLoginStatus = launchAtLoginController.status
+    self.notificationPermissionStatus = .notDetermined
     self.notificationEvaluator = notificationEvaluator
   }
 
@@ -60,6 +62,16 @@ final class AppModel: ObservableObject {
   }
 
   var providerOrder: [ProviderID] { settings.providerOrder }
+
+  var openCodeProviderIDs: [String] {
+    let discovered = snapshots[.opencode]?.modelBreakdowns.compactMap {
+      $0.providerID
+    } ?? []
+    let configured = Array(settings.quotaMappings.keys)
+      + Array(settings.localBudgets.keys).filter { $0 != "*" }
+    let values = Set(discovered + configured).filter { !$0.isEmpty }
+    return values.sorted()
+  }
 
   var dataStoreURL: URL? { repository.storeURL }
 
@@ -74,17 +86,25 @@ final class AppModel: ObservableObject {
   static func live() -> AppModel {
     let repository = makeRepository()
     let settings = (try? repository.loadSettings()) ?? .defaults
+    let initialSnapshots = (try? repository.latestSnapshots()) ?? [:]
+    let initialHistory = loadQuotaHistory(
+      repository: repository,
+      snapshots: initialSnapshots
+    )
     let providers = makeLiveProviders()
     let coordinator = UsageCoordinator(
       providers: providers,
       repository: repository,
-      settings: settings
+      settings: settings,
+      initialState: UsageState(snapshots: initialSnapshots)
     )
     return AppModel(
       coordinator: coordinator,
       repository: repository,
       notificationScheduler: NotificationScheduler(repository: repository),
       settings: settings,
+      initialSnapshots: initialSnapshots,
+      initialQuotaHistory: initialHistory,
       claudeBridgeInstaller: ClaudeBridgeInstaller(
         helperSource: packagedClaudeBridgeHelperURL()
       )
@@ -133,6 +153,7 @@ final class AppModel: ObservableObject {
     timerTask = nil
     refreshTask?.cancel()
     refreshTask = nil
+    Task { await coordinator.shutdown() }
   }
 
   func refresh() {
@@ -155,6 +176,10 @@ final class AppModel: ObservableObject {
     if automaticRefreshEnabled {
       reloadQuotaHistory(now: now)
     }
+    try? repository.prune(
+      now: now,
+      historyRetentionDays: settings.historyRetentionDays
+    )
     guard settings.notificationsEnabled else { return }
 
     for provider in settings.providerOrder {
@@ -202,6 +227,10 @@ final class AppModel: ObservableObject {
     settings = updated
     chartRange = updated.chartRange
     Task { await coordinator.updateSettings(updated) }
+    try? repository.prune(
+      now: Date(),
+      historyRetentionDays: updated.historyRetentionDays
+    )
     if automaticRefreshEnabled {
       restartTimer()
     }
@@ -245,6 +274,15 @@ final class AppModel: ObservableObject {
     applySettings(updated)
   }
 
+  func setOpenCodeLocalBudget(
+    _ budget: OpenCodeLocalBudget?,
+    for providerID: String
+  ) {
+    var updated = settings
+    updated.setLocalBudget(budget, forOpenCodeProviderID: providerID)
+    applySettings(updated)
+  }
+
   func setNotificationThreshold(_ threshold: Int, enabled: Bool) {
     var values = settings.notificationThresholds.filter { $0 != threshold }
     if enabled { values.append(threshold) }
@@ -279,6 +317,10 @@ final class AppModel: ObservableObject {
 
   func refreshSettingsState() {
     launchAtLoginStatus = launchAtLoginController.status
+    Task { @MainActor [weak self] in
+      guard let self else { return }
+      notificationPermissionStatus = await notificationScheduler.permissionStatus()
+    }
     guard let claudeBridgeInstaller else {
       claudeBridgeStatus = .notInstalled
       return
@@ -323,6 +365,7 @@ final class AppModel: ObservableObject {
     if enabled {
       do {
         let granted = try await notificationScheduler.requestAuthorization()
+        notificationPermissionStatus = await notificationScheduler.permissionStatus()
         updated.notificationsEnabled = granted
         if !granted {
           errorMessage = "Notifications are disabled in System Settings."
@@ -333,8 +376,16 @@ final class AppModel: ObservableObject {
       }
     } else {
       updated.notificationsEnabled = false
+      notificationPermissionStatus = await notificationScheduler.permissionStatus()
     }
     applySettings(updated)
+  }
+
+  func openNotificationSettings() {
+    guard let url = URL(
+      string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension"
+    ) else { return }
+    NSWorkspace.shared.open(url)
   }
 
   func clearHistory() {
@@ -412,6 +463,27 @@ final class AppModel: ObservableObject {
     }
   }
 
+  private static func loadQuotaHistory(
+    repository: SnapshotRepository,
+    snapshots: [ProviderID: ProviderSnapshot]
+  ) -> [ProviderID: [QuotaHistoryPoint]] {
+    let now = Date()
+    let range = now.addingTimeInterval(-5 * 3_600)...now
+    var history: [ProviderID: [QuotaHistoryPoint]] = [:]
+    for (provider, snapshot) in snapshots {
+      let window = snapshot.quotaWindows.first(where: {
+        $0.durationMinutes == 10_080
+      }) ?? snapshot.quotaWindows.first
+      guard let duration = window?.durationMinutes else { continue }
+      history[provider] = (try? repository.quotaHistory(
+        provider: provider,
+        durationMinutes: duration,
+        range: range
+      )) ?? []
+    }
+    return history
+  }
+
   private static func makeLiveProviders() -> [any UsageProvider] {
     let locator = ExecutableLocator()
     let process = FoundationProcessRunner(
@@ -436,7 +508,11 @@ final class AppModel: ObservableObject {
         )
       )
     } else {
-      codex = MissingUsageProvider(id: .codex, health: .toolMissing)
+      codex = MissingUsageProvider(
+        id: .codex,
+        health: .toolMissing,
+        candidates: locator.candidates(.codex)
+      )
     }
     return [openCode, claude, codex]
   }
@@ -483,9 +559,17 @@ final class AppModel: ObservableObject {
 private struct MissingUsageProvider: UsageProvider {
   let id: ProviderID
   let health: ProviderHealth
+  let candidates: [URL]
 
   func refresh(at now: Date) async -> ProviderSnapshot {
-    .unavailable(provider: id, health: health, observedAt: now)
+    .unavailable(
+      provider: id,
+      health: health,
+      observedAt: now,
+      diagnostic: candidates.isEmpty
+        ? nil
+        : "Checked: " + candidates.map(\.path).joined(separator: ", ")
+    )
   }
 }
 

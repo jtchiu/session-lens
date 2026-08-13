@@ -67,18 +67,21 @@ public struct OpenCodeProvider: UsageProvider {
             )
         }
 
-        let result = await process.run(
-            ProcessRequest(
-                executable: sqliteURL,
-                arguments: [
-                    "-readonly",
-                    "-json",
-                    databaseURL.path,
-                    Self.fixedAggregateSQL,
-                ],
-                timeout: .seconds(3)
-            )
+        let request = ProcessRequest(
+            executable: sqliteURL,
+            arguments: [
+                "-readonly",
+                "-json",
+                databaseURL.path,
+                Self.fixedAggregateSQL,
+            ],
+            timeout: .seconds(3)
         )
+        var result = await process.run(request)
+        if Self.isBusy(result.stderr) {
+            try? await Task.sleep(for: .milliseconds(80))
+            result = await process.run(request)
+        }
 
         switch result.termination {
         case .launchFailed:
@@ -164,6 +167,12 @@ public struct OpenCodeProvider: UsageProvider {
             quotaWindows: [],
             modelBreakdowns: modelBreakdowns
         )
+    }
+
+    private static func isBusy(_ stderr: Data) -> Bool {
+        let message = String(decoding: stderr, as: UTF8.self).lowercased()
+        return message.contains("database is locked")
+            || message.contains("database is busy")
     }
 
     private static func localDay(from value: String) -> Date? {

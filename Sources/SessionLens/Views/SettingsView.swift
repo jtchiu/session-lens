@@ -330,17 +330,25 @@ private struct ProviderSettingsView: View {
         status: claudeStatus,
         description: "Install a privacy bridge to receive usage and quota metadata.",
         source: "~/.claude/settings.json · explicit opt-in",
-        actionTitle: model.claudeBridgeStatus == .installed
-          ? "Uninstall Bridge"
-          : "Install Bridge",
+        actionTitle: claudeActionTitle,
         action: {
-          confirm(
-            model.claudeBridgeStatus == .installed
-              ? .uninstallBridge
-              : .installBridge
-          )
-        }
+          guard model.claudeBridgeStatus != .settingsChanged else { return }
+          confirm(model.claudeBridgeStatus == .installed
+            ? .uninstallBridge
+            : .installBridge)
+        },
+        actionEnabled: model.claudeBridgeStatus != .settingsChanged
       )
+
+      if model.claudeBridgeStatus == .settingsChanged {
+        Text(
+          "The Claude status line or bridge helper changed after installation. SessionLens left it untouched; resolve the conflict manually before reinstalling."
+        )
+        .font(.caption)
+        .foregroundStyle(.orange)
+        .padding(.leading, 40)
+        .padding(.bottom, SessionLensSpacing.medium)
+      }
 
       Divider()
 
@@ -401,15 +409,23 @@ private struct ProviderSettingsView: View {
     }
   }
 
+  private var claudeActionTitle: String {
+    switch model.claudeBridgeStatus {
+    case .notInstalled: "Install Bridge"
+    case .installed: "Uninstall Bridge"
+    case .settingsChanged: "Manual Resolution"
+    }
+  }
+
   private var codexQuotaSummary: String {
     guard
       let quota = model.snapshots[.codex]?.quotaWindows.first(where: {
         $0.durationMinutes == 10_080
-      }), let percent = quota.usedPercent
+      }), let percent = quota.remainingPercent
     else {
       return "Local methods: account/usage/read and account/rateLimits/read"
     }
-    return "Weekly · \(Int(percent.rounded()))% used"
+    return "Weekly · \(Int(percent.rounded()))% remaining"
   }
 
   private func status(for provider: ProviderID) -> ProviderSettingsStatus {
@@ -459,6 +475,7 @@ private struct ProviderSettingsRow: View {
   let source: String
   let actionTitle: String
   let action: () -> Void
+  var actionEnabled: Bool = true
 
   var body: some View {
     HStack(alignment: .top, spacing: SessionLensSpacing.medium) {
@@ -492,6 +509,7 @@ private struct ProviderSettingsRow: View {
       Button(actionTitle, action: action)
         .controlSize(.regular)
         .frame(minWidth: 116)
+        .disabled(!actionEnabled)
     }
     .padding(.vertical, SessionLensSpacing.large)
     .accessibilityElement(children: .contain)
@@ -502,14 +520,30 @@ private struct ProviderSettingsRow: View {
 private struct OpenCodeMappingView: View {
   @ObservedObject var model: AppModel
 
+  private var providerIDs: [String] {
+    let discovered = model.openCodeProviderIDs
+    return discovered.isEmpty ? ["openai", "anthropic"] : discovered
+  }
+
   var body: some View {
     VStack(alignment: .leading, spacing: SessionLensSpacing.small) {
       Text("Map exact OpenCode provider IDs to an account quota source.")
         .font(.caption)
         .foregroundStyle(.secondary)
 
-      mappingPicker(label: "openai", providerID: "openai")
-      mappingPicker(label: "anthropic", providerID: "anthropic")
+      ForEach(providerIDs, id: \.self) { providerID in
+        VStack(alignment: .leading, spacing: SessionLensSpacing.xSmall) {
+          mappingPicker(label: providerID, providerID: providerID)
+          budgetFields(providerID: providerID)
+        }
+      }
+
+      VStack(alignment: .leading, spacing: SessionLensSpacing.xSmall) {
+        Text("OpenCode aggregate fallback")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+        budgetFields(providerID: "*")
+      }
     }
     .padding(SessionLensSpacing.medium)
     .background(
@@ -544,6 +578,69 @@ private struct OpenCodeMappingView: View {
         Text(choice.title).tag(choice)
       }
     }
+  }
+
+  private func budgetFields(providerID: String) -> some View {
+    HStack(spacing: SessionLensSpacing.small) {
+      Text("Local budget")
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+      TextField(
+        "5-hour USD",
+        value: budgetBinding(providerID: providerID, window: .fiveHour),
+        format: .number.precision(.fractionLength(2))
+      )
+      .textFieldStyle(.roundedBorder)
+      .frame(width: 96)
+      TextField(
+        "Weekly USD",
+        value: budgetBinding(providerID: providerID, window: .weekly),
+        format: .number.precision(.fractionLength(2))
+      )
+      .textFieldStyle(.roundedBorder)
+      .frame(width: 96)
+    }
+  }
+
+  private enum BudgetWindow {
+    case fiveHour
+    case weekly
+  }
+
+  private func budgetBinding(
+    providerID: String,
+    window: BudgetWindow
+  ) -> Binding<Double> {
+    Binding(
+      get: {
+        let budget = model.settings.localBudget(forOpenCodeProviderID: providerID)
+        switch window {
+        case .fiveHour: return budget?.fiveHourUSD ?? 0
+        case .weekly: return budget?.weeklyUSD ?? 0
+        }
+      },
+      set: { value in
+        let current = model.settings.localBudget(
+          forOpenCodeProviderID: providerID
+        ) ?? OpenCodeLocalBudget()
+        let updated = switch window {
+        case .fiveHour:
+          OpenCodeLocalBudget(
+            fiveHourUSD: value > 0 ? value : nil,
+            weeklyUSD: current.weeklyUSD
+          )
+        case .weekly:
+          OpenCodeLocalBudget(
+            fiveHourUSD: current.fiveHourUSD,
+            weeklyUSD: value > 0 ? value : nil
+          )
+        }
+        model.setOpenCodeLocalBudget(
+          updated.isEmpty ? nil : updated,
+          for: providerID
+        )
+      }
+    )
   }
 }
 
@@ -653,9 +750,21 @@ private struct NotificationSettingsView: View {
           }
         )
       )
+      HStack(spacing: SessionLensSpacing.small) {
+        Text("Permission: \(permissionText)")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+        Spacer()
+        if model.notificationPermissionStatus == .denied {
+          Button("Open System Settings") {
+            model.openNotificationSettings()
+          }
+          .controlSize(.small)
+        }
+      }
       Text("Permission is requested only when this setting is enabled.")
-        .font(.caption)
-        .foregroundStyle(.secondary)
+        .font(.caption2)
+        .foregroundStyle(.tertiary)
 
       Divider()
 
@@ -700,6 +809,14 @@ private struct NotificationSettingsView: View {
           }
         )
       )
+    }
+  }
+
+  private var permissionText: String {
+    switch model.notificationPermissionStatus {
+    case .notDetermined: "Not requested"
+    case .authorized: "Authorized"
+    case .denied: "Denied"
     }
   }
 }

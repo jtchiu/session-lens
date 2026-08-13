@@ -80,6 +80,54 @@ struct UsageCoordinatorTests {
     }
 
     @Test @MainActor
+    func timeoutIsAppliedPerProviderAndReturnsWithinConfiguredBoundary() async throws {
+        let coordinator = UsageCoordinator(
+            providers: [
+                NonCancellableUsageProvider(id: .codex, delayMilliseconds: 250)
+            ],
+            repository: try SnapshotRepository.inMemory(),
+            providerTimeout: .milliseconds(30)
+        )
+        let clock = ContinuousClock()
+
+        let startedAt = clock.now
+        let state = await coordinator.refresh(at: Fixtures.now)
+        let elapsed = startedAt.duration(to: clock.now)
+
+        #expect(elapsed < .milliseconds(300))
+        #expect(state[.codex]?.health == .timedOut)
+    }
+
+    @Test @MainActor
+    func schemaFailureRetainsMetricsButExposesActionableHealth() async throws {
+        let good = Fixtures.codexSnapshot(observedAt: Fixtures.now)
+        let provider = SequencedUsageProvider(
+            id: .codex,
+            snapshots: [
+                good,
+                .unavailable(
+                    provider: .codex,
+                    health: .malformedData,
+                    observedAt: Fixtures.now.addingTimeInterval(60)
+                ),
+            ]
+        )
+        let coordinator = UsageCoordinator(
+            providers: [provider],
+            repository: try SnapshotRepository.inMemory()
+        )
+
+        _ = await coordinator.refresh(at: Fixtures.now)
+        let state = await coordinator.refresh(
+            at: Fixtures.now.addingTimeInterval(60)
+        )
+
+        #expect(state[.codex]?.health == .malformedData)
+        #expect(state[.codex]?.tokens == good.tokens)
+        #expect(state[.codex]?.quotaWindows == good.quotaWindows)
+    }
+
+    @Test @MainActor
     func firstFailureDoesNotFabricatePriorMetricsOrZeroes() async throws {
         let coordinator = UsageCoordinator(
             providers: [
@@ -159,6 +207,58 @@ struct UsageCoordinatorTests {
         #expect(quota.provenance == .exactProvider)
         #expect(quota.id == "attributed-codex-weekly")
     }
+
+    @Test @MainActor
+    func localOpenCodeBudgetsProduceFiveHourAndWeeklyRowsWhenExactQuotaIsAbsent() async throws {
+        var settings = AppSettings.defaults
+        settings.setLocalBudget(
+            OpenCodeLocalBudget(fiveHourUSD: 0.50, weeklyUSD: 1.00),
+            forOpenCodeProviderID: "openai"
+        )
+        let coordinator = UsageCoordinator(
+            providers: [
+                StaticUsageProvider(
+                    snapshot: Fixtures.openCodeSnapshot(providerIDs: ["openai"])
+                )
+            ],
+            repository: try SnapshotRepository.inMemory(),
+            settings: settings
+        )
+
+        let state = await coordinator.refresh(at: Fixtures.now)
+        let windows = try #require(state[.opencode]?.quotaWindows)
+
+        #expect(windows.map(\.label) == ["5-hour", "Weekly"])
+        #expect(windows.allSatisfy { $0.provenance == .localBudget })
+        #expect(windows[0].usedPercent == 50)
+        #expect(windows[1].usedPercent == 25)
+    }
+
+    @Test @MainActor
+    func exactOpenCodeAttributionTakesPrecedenceOverLocalBudget() async throws {
+        var settings = AppSettings.defaults
+        settings.setQuotaProvider(.codex, forOpenCodeProviderID: "openai")
+        settings.setLocalBudget(
+            OpenCodeLocalBudget(fiveHourUSD: 0.01, weeklyUSD: 0.01),
+            forOpenCodeProviderID: "openai"
+        )
+        let coordinator = UsageCoordinator(
+            providers: [
+                StaticUsageProvider(
+                    snapshot: Fixtures.openCodeSnapshot(providerIDs: ["openai"])
+                ),
+                StaticUsageProvider(snapshot: Fixtures.codexSnapshot()),
+            ],
+            repository: try SnapshotRepository.inMemory(),
+            settings: settings
+        )
+
+        let state = await coordinator.refresh(at: Fixtures.now)
+        let windows = try #require(state[.opencode]?.quotaWindows)
+
+        #expect(windows.allSatisfy { $0.provenance == .exactProvider })
+        #expect(windows.allSatisfy { !$0.id.hasPrefix("local-") })
+    }
 }
 
 private struct StaticUsageProvider: UsageProvider {
@@ -175,6 +275,26 @@ private struct DelayedUsageProvider: UsageProvider {
     func refresh(at now: Date) async -> ProviderSnapshot {
         try? await Task.sleep(for: delay)
         return Fixtures.aggregateSnapshot(provider: id, observedAt: now)
+    }
+}
+
+private struct NonCancellableUsageProvider: UsageProvider {
+    let id: ProviderID
+    let delayMilliseconds: Int
+
+    func refresh(at now: Date) async -> ProviderSnapshot {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global().asyncAfter(
+                deadline: .now() + .milliseconds(delayMilliseconds)
+            ) {
+                continuation.resume(
+                    returning: Fixtures.aggregateSnapshot(
+                        provider: id,
+                        observedAt: now
+                    )
+                )
+            }
+        }
     }
 }
 

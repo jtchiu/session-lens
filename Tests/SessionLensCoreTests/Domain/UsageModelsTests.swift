@@ -1,8 +1,71 @@
+import Foundation
 import Testing
 @testable import SessionLensCore
 
 @Suite
 struct UsageModelsTests {
+    @Test
+    func quotaWindowExposesRemainingCapacityWithoutChangingUsedValue() {
+        let window = QuotaWindow(
+            id: "weekly",
+            label: "Weekly",
+            durationMinutes: 10_080,
+            usedPercent: 22,
+            resetsAt: nil,
+            provenance: .exactProvider
+        )
+
+        #expect(window.usedPercent == 22)
+        #expect(window.remainingPercent == 78)
+    }
+
+    @Test
+    func remainingCapacityClampsAtFullAndDepleted() {
+        #expect(
+            QuotaWindow(
+                id: "full",
+                label: "5-hour",
+                durationMinutes: 300,
+                usedPercent: 0,
+                resetsAt: nil,
+                provenance: .exactProvider
+            ).remainingPercent == 100
+        )
+        #expect(
+            QuotaWindow(
+                id: "depleted",
+                label: "5-hour",
+                durationMinutes: 300,
+                usedPercent: 100,
+                resetsAt: nil,
+                provenance: .exactProvider
+            ).remainingPercent == 0
+        )
+        #expect(
+            QuotaWindow(
+                id: "unknown",
+                label: "5-hour",
+                durationMinutes: 300,
+                usedPercent: nil,
+                resetsAt: nil,
+                provenance: .unavailable
+            ).remainingPercent == nil
+        )
+    }
+
+    @Test
+    func quotaHistoryExposesRemainingCapacityForCharts() {
+        let point = QuotaHistoryPoint(
+            observedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            usedPercent: 22,
+            resetsAt: nil,
+            provenance: .exactProvider
+        )
+
+        #expect(point.usedPercent == 22)
+        #expect(point.remainingPercent == 78)
+    }
+
     @Test
     func quotaWindowClampsProviderPercentageAtUpperBound() {
         let window = QuotaWindow(

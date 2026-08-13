@@ -39,7 +39,61 @@ struct TokenSummaryView: View {
             .frame(minHeight: 25)
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Cost, \(costAccessibility)")
+
+            if let tokens = snapshot.tokens {
+                Divider()
+                VStack(alignment: .leading, spacing: SessionLensSpacing.xSmall) {
+                    Text("Token Detail")
+                        .font(.system(size: 11, weight: .semibold))
+                    detailRow("Input", tokens.input)
+                    detailRow("Output", tokens.output)
+                    detailRow("Reasoning", tokens.reasoning)
+                    detailRow("Cache read", tokens.cacheRead)
+                    detailRow("Cache write", tokens.cacheWrite)
+                }
+                .font(.system(size: 10))
+                .padding(.vertical, SessionLensSpacing.xSmall)
+            }
+
+            if !snapshot.modelBreakdowns.isEmpty {
+                Divider()
+                VStack(alignment: .leading, spacing: SessionLensSpacing.xSmall) {
+                    Text("Model Breakdown")
+                        .font(.system(size: 11, weight: .semibold))
+                    ForEach(snapshot.modelBreakdowns.prefix(6)) { model in
+                        HStack {
+                            Text(modelLabel(model))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Spacer()
+                            Text(compact(model.tokens.total))
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
+                }
+                .font(.system(size: 10))
+                .padding(.vertical, SessionLensSpacing.xSmall)
+            }
         }
+    }
+
+    private func detailRow(_ label: String, _ value: Int) -> some View {
+        HStack {
+            Text(label)
+            Spacer()
+            Text(compact(value))
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func modelLabel(_ model: ModelUsage) -> String {
+        if let providerID = model.providerID, !providerID.isEmpty {
+            return "\(providerID) · \(model.modelID)"
+        }
+        return model.modelID
     }
 
     private func metricRow(

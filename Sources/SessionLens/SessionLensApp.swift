@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 @main
@@ -16,6 +17,16 @@ struct SessionLensApp: App {
     _model = StateObject(
       wrappedValue: selectedModel
     )
+    selectedModel.start()
+    NotificationCenter.default.addObserver(
+      forName: NSApplication.willTerminateNotification,
+      object: nil,
+      queue: .main
+    ) { [weak selectedModel] _ in
+      Task { @MainActor in
+        selectedModel?.stop()
+      }
+    }
     #if DEBUG
       if visualFixtureMode {
         DispatchQueue.main.async {

@@ -164,7 +164,28 @@ struct ClaudeBridgeInstallerTests {
 
         #expect(try Data(contentsOf: privateState) == Data("private-state".utf8))
         #expect(try Data(contentsOf: projectSettings) == Data("project-state".utf8))
-        #expect(try Data(contentsOf: cache) == Data("normalized-cache".utf8))
+        #expect(!FileManager.default.fileExists(atPath: cache.path))
+    }
+
+    @Test
+    func missingOrModifiedHelperReportsConflictAndCannotBeUninstalled() throws {
+        let fixture = try TemporaryClaudeSettings(existingStatusLine: nil)
+        defer { fixture.remove() }
+        let installer = ClaudeBridgeInstaller(
+            paths: fixture.paths,
+            helperSource: fixture.helperSource
+        )
+
+        try installer.install()
+        try Data("modified-helper".utf8).write(
+            to: fixture.paths.installedHelperURL,
+            options: .atomic
+        )
+
+        #expect(try installer.status() == .settingsChanged)
+        #expect(throws: ClaudeBridgeInstallError.settingsChangedAfterInstall) {
+            try installer.uninstall()
+        }
     }
 }
 

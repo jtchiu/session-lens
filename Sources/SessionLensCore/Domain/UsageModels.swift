@@ -108,6 +108,12 @@ public struct QuotaHistoryPoint: Codable, Hashable, Sendable, Identifiable {
     }
 
     public var id: Date { observedAt }
+
+    /// The capacity still available in this quota window for presentation.
+    /// Persisted history intentionally remains expressed as used percentage.
+    public var remainingPercent: Double {
+        100 - usedPercent
+    }
 }
 
 public struct ModelUsage: Codable, Hashable, Sendable, Identifiable {
@@ -158,6 +164,12 @@ public struct QuotaWindow: Codable, Hashable, Sendable, Identifiable {
         self.resetsAt = resetsAt
         self.provenance = provenance
     }
+
+    /// The capacity still available in this quota window for presentation.
+    /// The source-of-truth value remains `usedPercent` for history and alerts.
+    public var remainingPercent: Double? {
+        usedPercent.map { 100 - $0 }
+    }
 }
 
 public struct ProviderSnapshot: Codable, Hashable, Sendable, Identifiable {
@@ -169,6 +181,7 @@ public struct ProviderSnapshot: Codable, Hashable, Sendable, Identifiable {
     public let dailyBuckets: [UsageBucket]
     public let quotaWindows: [QuotaWindow]
     public let modelBreakdowns: [ModelUsage]
+    public let diagnostic: String?
 
     public init(
         provider: ProviderID,
@@ -178,7 +191,8 @@ public struct ProviderSnapshot: Codable, Hashable, Sendable, Identifiable {
         costDisplay: CostDisplay,
         dailyBuckets: [UsageBucket],
         quotaWindows: [QuotaWindow],
-        modelBreakdowns: [ModelUsage]
+        modelBreakdowns: [ModelUsage],
+        diagnostic: String? = nil
     ) {
         self.provider = provider
         self.observedAt = observedAt
@@ -188,6 +202,7 @@ public struct ProviderSnapshot: Codable, Hashable, Sendable, Identifiable {
         self.dailyBuckets = dailyBuckets
         self.quotaWindows = quotaWindows
         self.modelBreakdowns = modelBreakdowns
+        self.diagnostic = diagnostic
     }
 
     public var id: ProviderID { provider }
@@ -204,7 +219,8 @@ public struct ProviderSnapshot: Codable, Hashable, Sendable, Identifiable {
     public static func unavailable(
         provider: ProviderID,
         health: ProviderHealth,
-        observedAt: Date = Date()
+        observedAt: Date = Date(),
+        diagnostic: String? = nil
     ) -> ProviderSnapshot {
         ProviderSnapshot(
             provider: provider,
@@ -214,7 +230,8 @@ public struct ProviderSnapshot: Codable, Hashable, Sendable, Identifiable {
             costDisplay: .unavailable,
             dailyBuckets: [],
             quotaWindows: [],
-            modelBreakdowns: []
+            modelBreakdowns: [],
+            diagnostic: diagnostic
         )
     }
 }

@@ -236,7 +236,7 @@ public actor FoundationJSONLTransport: JSONLTransport {
 
     public init(
         executable: URL,
-        arguments: [String] = ["app-server", "--stdio"]
+        arguments: [String] = ["app-server", "--listen", "stdio://"]
     ) {
         self.executable = executable
         self.arguments = arguments

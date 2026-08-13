@@ -1,15 +1,29 @@
 import Foundation
 import UserNotifications
 
+public enum NotificationPermissionStatus: String, Codable, Equatable, Sendable {
+    case notDetermined
+    case denied
+    case authorized
+}
+
 @MainActor
 public protocol NotificationDelivering: AnyObject {
     func requestAuthorization() async throws -> Bool
+    func permissionStatus() async -> NotificationPermissionStatus
     func deliver(_ event: NotificationEvent) async throws
+}
+
+public extension NotificationDelivering {
+    func permissionStatus() async -> NotificationPermissionStatus {
+        .notDetermined
+    }
 }
 
 @MainActor
 public protocol NotificationScheduling: AnyObject {
     func requestAuthorization() async throws -> Bool
+    func permissionStatus() async -> NotificationPermissionStatus
     func schedule(_ event: NotificationEvent) async throws
 }
 
@@ -29,6 +43,10 @@ public final class UNNotificationScheduler: NotificationScheduling {
 
     public func requestAuthorization() async throws -> Bool {
         try await delivery.requestAuthorization()
+    }
+
+    public func permissionStatus() async -> NotificationPermissionStatus {
+        await delivery.permissionStatus()
     }
 
     public func schedule(_ event: NotificationEvent) async throws {
@@ -57,6 +75,20 @@ public final class UserNotificationCenterDelivery: NotificationDelivering {
 
     public func requestAuthorization() async throws -> Bool {
         try await center.requestAuthorization(options: [.alert, .sound])
+    }
+
+    public func permissionStatus() async -> NotificationPermissionStatus {
+        let settings = await center.notificationSettings()
+        switch settings.authorizationStatus {
+        case .authorized, .provisional, .ephemeral:
+            return .authorized
+        case .denied:
+            return .denied
+        case .notDetermined:
+            return .notDetermined
+        @unknown default:
+            return .notDetermined
+        }
     }
 
     public func deliver(_ event: NotificationEvent) async throws {

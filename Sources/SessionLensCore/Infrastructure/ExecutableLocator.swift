@@ -40,6 +40,7 @@ public struct FoundationExecutableFileSystem: ExecutableFileSystem {
 
 public protocol ExecutableLocating: Sendable {
     func resolve(_ executable: ToolExecutable) -> URL?
+    func candidates(_ executable: ToolExecutable) -> [URL]
 }
 
 public struct ExecutableLocator: ExecutableLocating {
@@ -55,17 +56,8 @@ public struct ExecutableLocator: ExecutableLocating {
     }
 
     public func resolve(_ executable: ToolExecutable) -> URL? {
-        var seen: Set<String> = []
-        let pathCandidates = environmentPath
-            .split(separator: ":", omittingEmptySubsequences: true)
-            .map(String.init)
-            .filter { $0.hasPrefix("/") }
-            .map { "\($0)/\(executable.executableName)" }
-
-        for candidate in executable.fixedCandidates + pathCandidates {
-            let standardizedPath = URL(fileURLWithPath: candidate)
-                .standardizedFileURL.path
-            guard seen.insert(standardizedPath).inserted else { continue }
+        for candidate in candidates(executable) {
+            let standardizedPath = candidate.standardizedFileURL.path
             guard fileSystem.isExecutableFile(atPath: standardizedPath) else {
                 continue
             }
@@ -73,5 +65,19 @@ public struct ExecutableLocator: ExecutableLocating {
         }
 
         return nil
+    }
+
+    public func candidates(_ executable: ToolExecutable) -> [URL] {
+        var seen: Set<String> = []
+        let pathCandidates = environmentPath
+            .split(separator: ":", omittingEmptySubsequences: true)
+            .map(String.init)
+            .filter { $0.hasPrefix("/") }
+            .map { "\($0)/\(executable.executableName)" }
+
+        return (executable.fixedCandidates + pathCandidates).compactMap { path in
+            let url = URL(fileURLWithPath: path).standardizedFileURL
+            return seen.insert(url.path).inserted ? url : nil
+        }
     }
 }

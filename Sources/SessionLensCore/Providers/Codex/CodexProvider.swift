@@ -1,12 +1,18 @@
 import Foundation
 
-public struct CodexProvider: UsageProvider {
+public struct CodexProvider: StoppableUsageProvider {
     public let id = ProviderID.codex
 
     private let client: any CodexAccountReading
 
     public init(client: any CodexAccountReading) {
         self.client = client
+    }
+
+    public func shutdown() async {
+        if let client = client as? CodexAppServerClient {
+            await client.shutdown()
+        }
     }
 
     public func refresh(at now: Date) async -> ProviderSnapshot {

@@ -6,20 +6,33 @@ public actor UsageCoordinator {
     private var state = UsageState()
     private var settings: AppSettings
     private var isRefreshing = false
+    private let providerTimeout: Duration
 
     public init(
         providers: [any UsageProvider],
         repository: any SnapshotPersisting,
-        settings: AppSettings = .defaults
+        settings: AppSettings = .defaults,
+        initialState: UsageState = UsageState(),
+        providerTimeout: Duration = .seconds(8)
     ) {
         self.providers = providers
         self.repository = repository
         self.settings = settings
+        self.state = initialState
+        self.providerTimeout = providerTimeout
     }
 
     public func currentState() -> UsageState { state }
 
     public func currentSettings() -> AppSettings { settings }
+
+    public func shutdown() async {
+        for provider in providers {
+            if let stoppable = provider as? any StoppableUsageProvider {
+                await stoppable.shutdown()
+            }
+        }
+    }
 
     public func updateSettings(_ newSettings: AppSettings) async {
         settings = newSettings
@@ -41,7 +54,11 @@ public actor UsageCoordinator {
         ) { group in
             for provider in providers {
                 group.addTask {
-                    await provider.refresh(at: now)
+                    await Self.refresh(
+                        provider: provider,
+                        at: now,
+                        timeout: self.providerTimeout
+                    )
                 }
             }
 
@@ -61,12 +78,23 @@ public actor UsageCoordinator {
                 successfulProviders.insert(snapshot.provider)
             case .stale:
                 next.snapshots[snapshot.provider] = snapshot
-            case .setupRequired, .toolMissing, .malformedData, .timedOut,
-                .temporarilyUnavailable:
+            case .timedOut:
                 if let previous = state[snapshot.provider],
                     previous.health == .ready || previous.health == .stale
                 {
                     next.snapshots[snapshot.provider] = previous.markingStale()
+                } else {
+                    next.snapshots[snapshot.provider] = snapshot
+                }
+            case .setupRequired, .toolMissing, .malformedData,
+                .temporarilyUnavailable:
+                if let previous = state[snapshot.provider],
+                    previous.health == .ready || previous.health == .stale
+                {
+                    next.snapshots[snapshot.provider] = previous.retainMetrics(
+                        health: snapshot.health,
+                        diagnostic: snapshot.diagnostic
+                    )
                 } else {
                     next.snapshots[snapshot.provider] = snapshot
                 }
@@ -82,6 +110,44 @@ public actor UsageCoordinator {
             }
         }
         return next
+    }
+
+    private static func refresh(
+        provider: any UsageProvider,
+        at now: Date,
+        timeout: Duration
+    ) async -> ProviderSnapshot {
+        let providerTask = Task {
+            await provider.refresh(at: now)
+        }
+        let gate = SnapshotResultGate()
+        let timeoutTask = Task {
+            do {
+                try await Task.sleep(for: max(.zero, timeout))
+            } catch {
+                return
+            }
+            providerTask.cancel()
+            if let stoppable = provider as? any StoppableUsageProvider {
+                await stoppable.shutdown()
+            }
+            gate.resolve(
+                .unavailable(
+                    provider: provider.id,
+                    health: .timedOut,
+                    observedAt: now
+                )
+            )
+        }
+        let result = await withCheckedContinuation {
+            (continuation: CheckedContinuation<ProviderSnapshot, Never>) in
+            gate.install(continuation)
+            Task {
+                gate.resolve(await providerTask.value)
+            }
+        }
+        timeoutTask.cancel()
+        return result
     }
 
     private static func attributingOpenCodeQuota(
@@ -120,6 +186,11 @@ public actor UsageCoordinator {
             }
         }
 
+        let exactWindows = attributed
+        let localWindows = exactWindows.isEmpty
+            ? Self.localBudgetWindows(for: openCode, settings: settings)
+            : []
+
         output.snapshots[.opencode] = ProviderSnapshot(
             provider: .opencode,
             observedAt: openCode.observedAt,
@@ -127,14 +198,109 @@ public actor UsageCoordinator {
             tokens: openCode.tokens,
             costDisplay: openCode.costDisplay,
             dailyBuckets: openCode.dailyBuckets,
-            quotaWindows: attributed,
+            quotaWindows: exactWindows.isEmpty ? localWindows : exactWindows,
             modelBreakdowns: openCode.modelBreakdowns
         )
         return output
     }
+
+    private static func localBudgetWindows(
+        for openCode: ProviderSnapshot,
+        settings: AppSettings
+    ) -> [QuotaWindow] {
+        guard !settings.localBudgets.isEmpty else { return [] }
+
+        let modelProviderIDs = Set(
+            openCode.modelBreakdowns.compactMap(\.providerID)
+        )
+        let configured = settings.localBudgets.filter { providerID, _ in
+            providerID == "*" || modelProviderIDs.contains(providerID)
+        }
+        guard !configured.isEmpty else { return [] }
+
+        let weeklyCost = openCode.dailyBuckets.reduce(0.0) { total, bucket in
+            guard bucket.day >= openCode.observedAt.addingTimeInterval(-7 * 86_400)
+            else { return total }
+            return total + (bucket.costUSD ?? 0)
+        }
+        let fiveHourCost = openCode.dailyBuckets
+            .filter {
+                Calendar.current.isDate($0.day, inSameDayAs: openCode.observedAt)
+            }
+            .reduce(0.0) { $0 + ($1.costUSD ?? 0) }
+
+        let budget = configured.values.reduce(
+            OpenCodeLocalBudget(),
+            Self.mergeBudgets
+        )
+        return [
+            Self.localWindow(
+                id: "local-five-hour",
+                label: "5-hour",
+                duration: 300,
+                used: fiveHourCost,
+                limit: budget.fiveHourUSD,
+                observedAt: openCode.observedAt
+            ),
+            Self.localWindow(
+                id: "local-weekly",
+                label: "Weekly",
+                duration: 10_080,
+                used: weeklyCost,
+                limit: budget.weeklyUSD,
+                observedAt: openCode.observedAt
+            ),
+        ].compactMap { $0 }
+    }
+
+    private static func mergeBudgets(
+        _ lhs: OpenCodeLocalBudget,
+        _ rhs: OpenCodeLocalBudget
+    ) -> OpenCodeLocalBudget {
+        OpenCodeLocalBudget(
+            fiveHourUSD: lhs.fiveHourUSD ?? rhs.fiveHourUSD,
+            weeklyUSD: lhs.weeklyUSD ?? rhs.weeklyUSD
+        )
+    }
+
+    private static func localWindow(
+        id: String,
+        label: String,
+        duration: Int,
+        used: Double,
+        limit: Double?,
+        observedAt: Date
+    ) -> QuotaWindow? {
+        guard let limit, limit > 0 else { return nil }
+        return QuotaWindow(
+            id: id,
+            label: label,
+            durationMinutes: duration,
+            usedPercent: min(100, max(0, used / limit * 100)),
+            resetsAt: observedAt.addingTimeInterval(Double(duration) * 60),
+            provenance: .localBudget
+        )
+    }
 }
 
 private extension ProviderSnapshot {
+    func retainMetrics(
+        health: ProviderHealth,
+        diagnostic: String?
+    ) -> ProviderSnapshot {
+        ProviderSnapshot(
+            provider: provider,
+            observedAt: observedAt,
+            health: health,
+            tokens: tokens,
+            costDisplay: costDisplay,
+            dailyBuckets: dailyBuckets,
+            quotaWindows: quotaWindows,
+            modelBreakdowns: modelBreakdowns,
+            diagnostic: diagnostic
+        )
+    }
+
     func markingStale() -> ProviderSnapshot {
         ProviderSnapshot(
             provider: provider,
@@ -153,7 +319,40 @@ private extension ProviderSnapshot {
                     provenance: .stale
                 )
             },
-            modelBreakdowns: modelBreakdowns
+            modelBreakdowns: modelBreakdowns,
+            diagnostic: diagnostic
         )
+    }
+}
+
+private final class SnapshotResultGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<ProviderSnapshot, Never>?
+    private var result: ProviderSnapshot?
+
+    func install(
+        _ continuation: CheckedContinuation<ProviderSnapshot, Never>
+    ) {
+        lock.lock()
+        if let result {
+            lock.unlock()
+            continuation.resume(returning: result)
+            return
+        }
+        self.continuation = continuation
+        lock.unlock()
+    }
+
+    func resolve(_ result: ProviderSnapshot) {
+        lock.lock()
+        guard self.result == nil else {
+            lock.unlock()
+            return
+        }
+        self.result = result
+        let continuation = self.continuation
+        self.continuation = nil
+        lock.unlock()
+        continuation?.resume(returning: result)
     }
 }

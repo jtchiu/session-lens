@@ -5,6 +5,31 @@ import Testing
 @Suite
 struct CodexProviderTests {
     @Test
+    func providerShowsWeeklyOnlyWhenCodexDoesNotReturnFiveHourWindow() async {
+        let weeklyOnly = CodexRateLimitsResponse(
+            rateLimits: CodexRateLimitSnapshot(
+                limitId: "codex",
+                limitName: "Codex",
+                planType: "plus",
+                primary: CodexRateLimitWindow(
+                    usedPercent: 63,
+                    windowDurationMins: 10_080,
+                    resetsAt: 1_736_294_400
+                )
+            ),
+            rateLimitsByLimitId: nil
+        )
+
+        let snapshot = await CodexProvider(
+            client: FakeCodexClient(rateLimits: weeklyOnly)
+        ).refresh(at: Fixtures.now)
+
+        #expect(snapshot.quotaWindows.map(\.label) == ["Weekly"])
+        #expect(snapshot.quotaWindows.map(\.durationMinutes) == [10_080])
+        #expect(!snapshot.quotaWindows.contains { $0.durationMinutes == 300 })
+    }
+
+    @Test
     func providerNormalizesWeeklyAndFiveHourWindows() async {
         let client = FakeCodexClient()
 

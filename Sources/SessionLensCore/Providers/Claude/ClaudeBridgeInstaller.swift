@@ -77,6 +77,14 @@ public struct ClaudeBridgeInstaller {
         guard let expected = configuration.installedStatusLineChecksum else {
             throw ClaudeBridgeInstallError.invalidMetadata
         }
+        guard fileManager.fileExists(atPath: paths.installedHelperURL.path) else {
+            return .settingsChanged
+        }
+        if let expectedHelper = configuration.helperChecksum,
+            try Self.checksum(forFileAt: paths.installedHelperURL) != expectedHelper
+        {
+            return .settingsChanged
+        }
         let settings = try readSettings()
         guard let statusLine = settings["statusLine"] else {
             return .settingsChanged
@@ -114,7 +122,8 @@ public struct ClaudeBridgeInstaller {
         )
         let configuration = ClaudeBridgeConfiguration(
             previousCommand: previousCommand,
-            installedStatusLineChecksum: checksum
+            installedStatusLineChecksum: checksum,
+            helperChecksum: try Self.checksum(forFileAt: helperSource)
         )
 
         try createBridgeDirectory()
@@ -150,6 +159,14 @@ public struct ClaudeBridgeInstaller {
         guard let expected = configuration.installedStatusLineChecksum else {
             throw ClaudeBridgeInstallError.invalidMetadata
         }
+        guard fileManager.fileExists(atPath: paths.installedHelperURL.path) else {
+            throw ClaudeBridgeInstallError.settingsChangedAfterInstall
+        }
+        if let expectedHelper = configuration.helperChecksum,
+            try Self.checksum(forFileAt: paths.installedHelperURL) != expectedHelper
+        {
+            throw ClaudeBridgeInstallError.settingsChangedAfterInstall
+        }
         var settings = try readSettings()
         guard let currentStatusLine = settings["statusLine"],
             try Self.checksum(forJSONObject: currentStatusLine) == expected
@@ -174,6 +191,12 @@ public struct ClaudeBridgeInstaller {
         try fileManager.removeItem(at: paths.backupURL)
         if fileManager.fileExists(atPath: paths.installedHelperURL.path) {
             try fileManager.removeItem(at: paths.installedHelperURL)
+        }
+        let cacheURL = paths.bridgeDirectory.appendingPathComponent(
+            "claude-usage.json"
+        )
+        if fileManager.fileExists(atPath: cacheURL.path) {
+            try fileManager.removeItem(at: cacheURL)
         }
     }
 
@@ -270,6 +293,12 @@ public struct ClaudeBridgeInstaller {
 
     private static func checksum(forJSONObject object: Any) throws -> String {
         SHA256.hash(data: try canonicalJSONData(object))
+            .map { String(format: "%02x", $0) }
+            .joined()
+    }
+
+    private static func checksum(forFileAt url: URL) throws -> String {
+        SHA256.hash(data: try Data(contentsOf: url))
             .map { String(format: "%02x", $0) }
             .joined()
     }

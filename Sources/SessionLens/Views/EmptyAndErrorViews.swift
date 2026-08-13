@@ -48,7 +48,8 @@ struct ProviderStateView: View {
         case .setupRequired:
             "The local aggregate usage source was not found."
         case .toolMissing:
-            "SessionLens could not find this provider's local command."
+            snapshot?.diagnostic
+                ?? "SessionLens could not find this provider's local command."
         case .malformedData:
             "The provider's aggregate schema no longer matches the tested allowlist."
         case .timedOut:

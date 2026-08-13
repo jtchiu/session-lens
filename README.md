@@ -39,6 +39,10 @@ Open `dist/SessionLens.app`. If macOS blocks the first launch, Control-click the
 
 Leave the default OpenCode database at `~/.local/share/opencode/opencode.db` or make the same path available before refreshing. SessionLens reports setup required, tool missing, timeout, schema drift, or a ready aggregate without fabricating zeros. OpenCode provider IDs are not assigned to Claude or Codex quotas unless you explicitly choose a mapping in Settings.
 
+In Settings → Providers, each discovered OpenCode provider ID can have an optional local USD budget for a rolling 5-hour window and a weekly window. These values are user-configured guardrails, not provider quotas; the popover labels them **Local budget**. A wildcard fallback can be used when the aggregate contains several provider IDs. Exact Claude or Codex attribution always takes precedence.
+
+Quota windows are shown as remaining capacity throughout the app: a 22% used window appears as 78% remaining, and its bar depletes as usage accumulates. Notification thresholds and stored history continue to use provider-reported usage percentages.
+
 ## Claude bridge setup and removal
 
 Open Settings → Providers → Claude Code and choose **Install Bridge**. Read and confirm the native warning before allowing the one write to `~/.claude/settings.json`. SessionLens backs up the prior `statusLine` value, preserves its command output, and uses a checksum before restoring it. Choose **Uninstall Bridge** to restore the exact prior status line; if the setting changed afterward, SessionLens stops without overwriting it.
@@ -47,13 +51,15 @@ Open Settings → Providers → Claude Code and choose **Install Bridge**. Read 
 
 Install and authenticate Codex locally so `codex` is discoverable on `PATH` or in one of the supported macOS locations. SessionLens starts the local app-server and requests only account usage and rate-limit methods. It does not enumerate threads or read thread content.
 
+Codex quota windows are detection-only: SessionLens shows a 5-hour window only when the current app-server response exposes one. The menu-bar summary prefers that 5-hour window and falls back to the returned weekly window while Codex's 5-hour limit is unavailable.
+
 ## Notifications
 
 Notifications are disabled by default. Enable them in Settings to request macOS permission, then choose percentage thresholds and whether quota resets should notify. Unavailable, stale, estimated, and local-budget values do not produce provider-quota alerts, and durable event keys prevent duplicate crossings.
 
 ## Local data and clearing history
 
-Normalized history is stored at `~/Library/Application Support/SessionLens/usage.sqlite`; Claude bridge metadata and cache live under `~/Library/Application Support/SessionLens/Bridge`. Settings control refresh interval and retention. **Clear History** asks for confirmation and deletes only SessionLens usage, quota-history, and notification records; it does not touch provider data or Claude settings.
+Normalized history is stored at `~/Library/Application Support/SessionLens/usage.sqlite`; Claude bridge metadata and cache live under `~/Library/Application Support/SessionLens/Bridge`. Settings control the 60-second default refresh interval and retention. Fine-grained quota observations are retained for at most 90 days, daily aggregates follow the selected retention, and notification crossing keys are pruned with that same local retention. **Clear History** asks for confirmation and deletes only SessionLens usage, quota-history, and notification records; it does not touch provider data or Claude settings.
 
 ## Verification
 

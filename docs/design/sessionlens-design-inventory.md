@@ -9,9 +9,9 @@
 
 ## Allowed visible copy
 
-Popover copy is limited to: `OpenCode`, `Claude`, `Codex`, `Weekly`, `resets in`, `Usage Rate`, `of weekly limit`, `Daily Usage`, `7d`, `30d`, `90d`, `Token Usage`, `Today`, `Last 7 Days`, `Cost`, `Included with plan`, `Updated just now`, `Settings`, `Quit`, availability and error explanations, localized dates, normalized token counts, normalized currency totals, percentages, and reset countdowns.
+Popover copy is limited to: `OpenCode`, `Claude`, `Codex`, `5-hour`, `Weekly`, `resets`, `Remaining`, `Depleted`, `Exact provider quota`, `Local budget`, `Quota unavailable`, `Quota Remaining`, `of weekly limit`, `Daily Usage`, `7d`, `30d`, `90d`, `Token Usage`, `Token Detail`, `Model Breakdown`, `Input`, `Output`, `Reasoning`, `Cache read`, `Cache write`, `Today`, `Last 7 Days`, `Cost`, `Included with plan`, `Updated just now`, `Settings`, `Quit`, availability and error explanations, localized dates, normalized token counts, normalized currency totals, percentages, and reset countdowns.
 
-Settings copy is limited to: `SessionLens`, `General`, `Providers`, `Menu Bar`, `Notifications`, `Privacy`, `Local, read-only usage sources.`, `Detected`, `Not installed`, `Connected`, `Configure Mapping`, `Install Bridge`, `Uninstall Bridge`, `Refresh`, `Aggregate tokens and cost from the local session database.`, `Install a privacy bridge to receive usage and quota metadata.`, `Exact account usage and rate limits through the local app-server.`, `Weekly`, `Only aggregate usage metadata is stored. Prompts, source code, credentials, and project paths are never read.`, `Learn More`, plus native labels for refresh interval, chart range, menu-bar display, notification thresholds, launch at login, retention, bridge confirmation, history deletion confirmation, and source-specific failure states.
+Settings copy is limited to: `SessionLens`, `General`, `Providers`, `Menu Bar`, `Notifications`, `Privacy`, `Local, read-only usage sources.`, `Detected`, `Not installed`, `Connected`, `Configure Mapping`, `Install Bridge`, `Uninstall Bridge`, `Manual Resolution`, `Local budget`, `Permission`, `Not requested`, `Authorized`, `Denied`, `Open System Settings`, `Refresh`, `Aggregate tokens and cost from the local session database.`, `Install a privacy bridge to receive usage and quota metadata.`, `Exact account usage and rate limits through the local app-server.`, `Weekly`, `Only aggregate usage metadata is stored. Prompts, source code, credentials, and project paths are never read.`, `Learn More`, plus native labels for refresh interval, chart range, menu-bar display, notification thresholds, launch at login, retention, bridge confirmation, history deletion confirmation, and source-specific failure states.
 
 Never show prompts, source code, message excerpts, credentials, project paths, account identifiers, raw provider payloads, marketing copy, upgrade prompts, license copy, advertisements, or SessionWatcher product text or marks.
 
@@ -93,7 +93,7 @@ Use SF Symbols for all code-native interface icons:
 
 ## Chart styling
 
-- Usage Rate is a two-point selected-provider stroke with rounded joins, a subtle 8–12% accent fill, minimal horizontal guides, no point markers except on hover, and a restrained right-edge current-value emphasis.
+- Quota Remaining is a two-point selected-provider stroke with rounded joins, a subtle 8–12% accent fill, minimal horizontal guides, no point markers except on hover, and a restrained right-edge current-value emphasis. It charts remaining capacity, so the line falls as provider usage accumulates.
 - Daily Usage is seven, thirty, or ninety compact bars. The selected range control is native and the current day uses full accent opacity; historical bars use 55–75% opacity.
 - Use calendar-correct day boundaries in the current locale and timezone. Do not interpolate missing provider data into false precision.
 - Axis labels use secondary text at 10 points. Gridlines use semantic separators at low opacity.

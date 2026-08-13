@@ -204,7 +204,9 @@ The status item uses the SessionLens mark plus a compact text mode chosen in Set
 - **Icons:** three tiny provider state indicators without numbers;
 - **Minimal:** mark only.
 
-The default is Urgent. Exact quota values outrank local budgets. Unavailable values never render as `0%`.
+The default is Urgent. Exact quota values outrank local budgets. Within the selected source, the menu-bar summary prefers a detected 5-hour window, then a detected weekly window, and never fabricates a missing Codex 5-hour window. Unavailable values never render as `0%`.
+
+Provider-reported usage remains the normalized source value for history and notifications, but every visible quota percentage is presented as remaining capacity (`100 - used`). Bars and quota-history charts therefore deplete as usage accumulates; labels and accessibility text say `remaining` where a percentage is shown.
 
 Semantic colors are restrained: neutral below 70%, amber at 70%, red at 90%, and muted gray when unavailable or stale. Color is never the only state cue.
 

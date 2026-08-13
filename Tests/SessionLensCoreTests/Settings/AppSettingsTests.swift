@@ -13,6 +13,8 @@ struct AppSettingsTests {
         #expect(settings.menuBarDisplayMode == .urgent)
         #expect(settings.providerOrder == ProviderID.allCases)
         #expect(settings.notificationThresholds == [70, 90])
+        #expect(settings.refreshIntervalSeconds == 60)
+        #expect(settings.localBudgets.isEmpty)
     }
 
     @Test
@@ -58,6 +60,10 @@ struct AppSettingsTests {
         original.chartRange = .ninetyDays
         original.menuBarDisplayMode = .icons
         original.setQuotaProvider(.claude, forOpenCodeProviderID: "anthropic")
+        original.setLocalBudget(
+            OpenCodeLocalBudget(fiveHourUSD: 2.5, weeklyUSD: 18),
+            forOpenCodeProviderID: "openai"
+        )
 
         let decoded = try JSONDecoder().decode(
             AppSettings.self,
@@ -65,6 +71,30 @@ struct AppSettingsTests {
         )
 
         #expect(decoded == original)
+    }
+
+    @Test
+    func localBudgetsNormalizeInvalidValuesAndEmptyEntries() {
+        var settings = AppSettings(
+            openCodeLocalBudgets: [
+                "openai": OpenCodeLocalBudget(
+                    fiveHourUSD: -1,
+                    weeklyUSD: .infinity
+                ),
+                "": OpenCodeLocalBudget(weeklyUSD: 4),
+                "anthropic": OpenCodeLocalBudget(weeklyUSD: 12),
+            ]
+        )
+
+        #expect(settings.localBudget(forOpenCodeProviderID: "openai") == nil)
+        #expect(settings.localBudget(forOpenCodeProviderID: "") == nil)
+        #expect(
+            settings.localBudget(forOpenCodeProviderID: "anthropic")
+                == OpenCodeLocalBudget(weeklyUSD: 12)
+        )
+
+        settings.setLocalBudget(nil, forOpenCodeProviderID: "anthropic")
+        #expect(settings.localBudgets.isEmpty)
     }
 
     @Test

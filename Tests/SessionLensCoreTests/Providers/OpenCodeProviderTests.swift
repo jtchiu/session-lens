@@ -116,6 +116,33 @@ struct OpenCodeProviderTests {
     }
 
     @Test
+    func busyDatabaseRetriesOnceBeforeReturningNormalizedRows() async {
+        let process = FakeProcessRunner(results: [
+            ProcessResult(
+                stdout: Data(),
+                stderr: Data("database is locked".utf8),
+                termination: .exited(1)
+            ),
+            ProcessResult(
+                stdout: Fixtures.openCodeRowsJSON,
+                stderr: Data(),
+                termination: .exited(0)
+            ),
+        ])
+        let provider = OpenCodeProvider(
+            databaseURL: Fixtures.openCodeDatabaseURL,
+            process: process,
+            sqliteURL: Fixtures.sqliteURL
+        )
+
+        let snapshot = await provider.refresh(at: Fixtures.now)
+
+        #expect(snapshot.health == .ready)
+        #expect(snapshot.costUSD == 1.25)
+        #expect((await process.requests()).count == 2)
+    }
+
+    @Test
     func processTimeoutReturnsUnavailableWithoutFabricatingMetrics() async {
         let provider = OpenCodeProvider(
             databaseURL: Fixtures.openCodeDatabaseURL,

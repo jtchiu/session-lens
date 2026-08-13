@@ -197,6 +197,18 @@ struct ClaudeBridgeTests {
         #expect(requests.first?.stdin == original)
     }
 
+    @Test
+    func bridgePipelineForwardsEvenWhenPayloadCaptureFails() async {
+        let input = Data("malformed".utf8)
+        let output = await ClaudeBridgePipeline.captureAndForward(
+            input: input,
+            capture: { _ in throw ClaudeBridgeInstallError.invalidSettings },
+            forward: { input }
+        )
+
+        #expect(output == input)
+    }
+
     private func permissionMode(at url: URL) throws -> Int {
         let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
         let number = try #require(attributes[.posixPermissions] as? NSNumber)
