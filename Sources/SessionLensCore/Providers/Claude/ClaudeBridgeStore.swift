@@ -7,9 +7,14 @@ public protocol ClaudeCacheStoring: Sendable {
 
 public struct ClaudeBridgeConfiguration: Codable, Equatable, Sendable {
     public let previousCommand: String?
+    public let installedStatusLineChecksum: String?
 
-    public init(previousCommand: String?) {
+    public init(
+        previousCommand: String?,
+        installedStatusLineChecksum: String? = nil
+    ) {
         self.previousCommand = previousCommand
+        self.installedStatusLineChecksum = installedStatusLineChecksum
     }
 }
 
