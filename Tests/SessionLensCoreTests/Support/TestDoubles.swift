@@ -51,3 +51,64 @@ actor FakeProcessRunner: ProcessExecuting {
         recordedRequests
     }
 }
+
+enum FakeJSONLEvent: Sendable {
+    case object([String: JSONValue])
+    case timeout
+    case endOfFile
+    case malformed
+}
+
+actor FakeJSONLTransport: JSONLTransport {
+    private var events: [FakeJSONLEvent]
+    private var sentObjects: [[String: JSONValue]] = []
+    private var starts = 0
+    private var stops = 0
+
+    init(events: [FakeJSONLEvent]) {
+        self.events = events
+    }
+
+    func start() async throws {
+        starts += 1
+    }
+
+    func send(_ object: [String: JSONValue]) async throws {
+        sentObjects.append(object)
+    }
+
+    func nextObject(timeout: Duration) async throws -> [String: JSONValue] {
+        guard !events.isEmpty else { throw JSONLTransportError.endOfFile }
+        switch events.removeFirst() {
+        case let .object(object):
+            return object
+        case .timeout:
+            throw JSONLTransportError.timedOut
+        case .endOfFile:
+            throw JSONLTransportError.endOfFile
+        case .malformed:
+            throw JSONLTransportError.malformedJSON
+        }
+    }
+
+    func stop() async {
+        stops += 1
+    }
+
+    func sentMethods() -> [String] {
+        sentObjects.compactMap { object in
+            guard case let .string(method) = object["method"] else { return nil }
+            return method
+        }
+    }
+
+    func sentRequestIDs() -> [Int] {
+        sentObjects.compactMap { object in
+            guard case let .number(id) = object["id"] else { return nil }
+            return Int(id)
+        }
+    }
+
+    func startCount() -> Int { starts }
+    func stopCount() -> Int { stops }
+}

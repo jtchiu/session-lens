@@ -34,6 +34,75 @@ enum Fixtures {
         """#.utf8
     )
 
+    static func codexResponse(
+        id: Int,
+        result: [String: JSONValue]
+    ) -> [String: JSONValue] {
+        [
+            "id": .number(Double(id)),
+            "result": .object(result),
+        ]
+    }
+
+    static func codexInitializeResponse(id: Int) -> [String: JSONValue] {
+        codexResponse(id: id, result: [:])
+    }
+
+    static func codexRateLimitResponse(id: Int) -> [String: JSONValue] {
+        codexResponse(
+            id: id,
+            result: [
+                "rateLimits": .object(codexRateLimitSnapshot),
+                "rateLimitsByLimitId": .object([
+                    "codex": .object(codexRateLimitSnapshot)
+                ]),
+            ]
+        )
+    }
+
+    static func codexUsageResponse(id: Int) -> [String: JSONValue] {
+        codexResponse(
+            id: id,
+            result: [
+                "summary": .object([
+                    "lifetimeTokens": .number(500_000_000),
+                    "currentStreakDays": .number(4),
+                    "longestStreakDays": .number(12),
+                    "peakDailyTokens": .number(453_544_969),
+                    "longestRunningTurnSec": .number(3_600),
+                ]),
+                "dailyUsageBuckets": .array([
+                    .object([
+                        "startDate": .string("2025-01-01"),
+                        "tokens": .number(1_000),
+                    ]),
+                    .object([
+                        "startDate": .string("2025-01-02"),
+                        "tokens": .number(453_544_969),
+                    ]),
+                ]),
+            ]
+        )
+    }
+
+    private static let codexRateLimitSnapshot: [String: JSONValue] = [
+        "limitId": .string("codex"),
+        "limitName": .string("Codex"),
+        "planType": .string("plus"),
+        "primary": .object([
+            "usedPercent": .number(42),
+            "windowDurationMins": .number(300),
+            "resetsAt": .number(1_735_693_200),
+        ]),
+        "secondary": .object([
+            "usedPercent": .number(36),
+            "windowDurationMins": .number(10_080),
+            "resetsAt": .number(1_736_294_400),
+        ]),
+        "rateLimitReachedType": .null,
+        "spendControlReached": .bool(false),
+    ]
+
     static func day(_ offset: Int) -> Date {
         Calendar.utc.date(byAdding: .day, value: offset, to: now)!
     }
