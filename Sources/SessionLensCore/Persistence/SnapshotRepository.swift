@@ -8,7 +8,14 @@ public enum SnapshotRepositoryError: Error, Equatable {
 }
 
 @MainActor
-public final class SnapshotRepository {
+public protocol SnapshotPersisting: Sendable {
+    func record(_ snapshot: ProviderSnapshot) throws
+    func saveSettings(_ settings: AppSettings) throws
+    func loadSettings() throws -> AppSettings?
+}
+
+@MainActor
+public final class SnapshotRepository: SnapshotPersisting {
     private static let managedObjectModel = SessionLensPersistenceModel.makeModel()
 
     private let coordinator: NSPersistentStoreCoordinator
@@ -212,6 +219,26 @@ public final class SnapshotRepository {
         try context.save()
     }
 
+    public func saveSettings(_ settings: AppSettings) throws {
+        let key = "app-settings"
+        let request = SettingsRecord.fetchRequest()
+        request.predicate = NSPredicate(format: "key == %@", key)
+        request.fetchLimit = 1
+        let record = try context.fetch(request).first ?? insertSettingsRecord()
+        record.key = key
+        record.settingsData = try encoder.encode(settings)
+        record.updatedAt = Date()
+        try context.save()
+    }
+
+    public func loadSettings() throws -> AppSettings? {
+        let request = SettingsRecord.fetchRequest()
+        request.predicate = NSPredicate(format: "key == %@", "app-settings")
+        request.fetchLimit = 1
+        guard let record = try context.fetch(request).first else { return nil }
+        return try decoder.decode(AppSettings.self, from: record.settingsData)
+    }
+
     func snapshotRecordCount() throws -> Int {
         try context.count(for: SnapshotRecord.fetchRequest())
     }
@@ -289,6 +316,13 @@ public final class SnapshotRepository {
         ) as! NotificationRecord
     }
 
+    private func insertSettingsRecord() -> SettingsRecord {
+        NSEntityDescription.insertNewObject(
+            forEntityName: "SettingsRecord",
+            into: context
+        ) as! SettingsRecord
+    }
+
     private static func snapshotKey(_ provider: ProviderID, _ date: Date) -> String {
         "\(provider.rawValue):\(date.timeIntervalSinceReferenceDate.bitPattern)"
     }
@@ -347,5 +381,11 @@ private extension DailyUsageRecord {
 private extension NotificationRecord {
     static func fetchRequest() -> NSFetchRequest<NotificationRecord> {
         NSFetchRequest(entityName: "NotificationRecord")
+    }
+}
+
+private extension SettingsRecord {
+    static func fetchRequest() -> NSFetchRequest<SettingsRecord> {
+        NSFetchRequest(entityName: "SettingsRecord")
     }
 }

@@ -260,6 +260,45 @@ enum Fixtures {
         )
     }
 
+    static func openCodeSnapshot(
+        providerIDs: [String],
+        observedAt: Date = now
+    ) -> ProviderSnapshot {
+        let breakdowns = providerIDs.enumerated().map { index, providerID in
+            ModelUsage(
+                providerID: providerID,
+                modelID: "model-\(index)",
+                tokens: TokenBreakdown(
+                    input: 100,
+                    output: 25,
+                    reasoning: 0,
+                    cacheRead: 0,
+                    cacheWrite: 0
+                ),
+                costUSD: 0.25
+            )
+        }
+        let tokens = TokenBreakdown(
+            input: breakdowns.reduce(0) { $0 + $1.tokens.input },
+            output: breakdowns.reduce(0) { $0 + $1.tokens.output },
+            reasoning: 0,
+            cacheRead: 0,
+            cacheWrite: 0
+        )
+        return ProviderSnapshot(
+            provider: .opencode,
+            observedAt: observedAt,
+            health: .ready,
+            tokens: tokens,
+            costDisplay: .exactUSD(Double(providerIDs.count) * 0.25),
+            dailyBuckets: [
+                UsageBucket(day: observedAt, tokens: tokens.total, costUSD: 0.25)
+            ],
+            quotaWindows: [],
+            modelBreakdowns: breakdowns
+        )
+    }
+
     static func claudeCache(
         tokens: Int,
         sessionCostUSD: Double?,
