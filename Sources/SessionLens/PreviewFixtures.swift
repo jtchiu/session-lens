@@ -2,7 +2,7 @@ import Foundation
 import SessionLensCore
 
 enum PreviewFixtures {
-    private static let now = Date(timeIntervalSince1970: 1_786_584_000)
+    private static let now = Date()
 
     static let settings = AppSettings(
         refreshIntervalSeconds: 300,
@@ -69,6 +69,21 @@ enum PreviewFixtures {
             ],
             modelBreakdowns: []
         ),
+    ]
+
+    static let quotaHistory: [ProviderID: [QuotaHistoryPoint]] = [
+        .codex: [26, 22, 31, 38, 50, 45, 49, 48, 42, 39, 36]
+            .enumerated()
+            .map { index, value in
+                QuotaHistoryPoint(
+                    observedAt: now.addingTimeInterval(
+                        Double(index - 10) * 30 * 60
+                    ),
+                    usedPercent: Double(value),
+                    resetsAt: now.addingTimeInterval(4 * 86_400),
+                    provenance: .exactProvider
+                )
+            }
     ]
 
     private static func dailyBuckets(

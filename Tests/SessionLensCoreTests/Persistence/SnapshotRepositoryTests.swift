@@ -112,6 +112,41 @@ struct SnapshotRepositoryTests {
   }
 
   @Test
+  func quotaHistoryUsesLogicalDurationAcrossResetIdentityChanges() throws {
+    let repository = try SnapshotRepository.inMemory()
+    for (offset, percent) in [(0, 20.0), (1, 36.0), (2, 4.0)] {
+      let quota = QuotaWindow(
+        id: "codex:10080:reset-\(offset)",
+        label: "Weekly",
+        durationMinutes: 10_080,
+        usedPercent: percent,
+        resetsAt: Fixtures.day(offset + 2),
+        provenance: .exactProvider
+      )
+      try repository.record(
+        Fixtures.aggregateSnapshot(
+          provider: .codex,
+          observedAt: Fixtures.now.addingTimeInterval(Double(offset * 60)),
+          quotaWindows: [quota]
+        )
+      )
+    }
+
+    let points = try repository.quotaHistory(
+      provider: .codex,
+      durationMinutes: 10_080,
+      range: Fixtures.now...Fixtures.now.addingTimeInterval(180)
+    )
+
+    #expect(points.map(\.usedPercent) == [20, 36, 4])
+    #expect(points.map(\.observedAt) == [
+      Fixtures.now,
+      Fixtures.now.addingTimeInterval(60),
+      Fixtures.now.addingTimeInterval(120),
+    ])
+  }
+
+  @Test
   func notificationKeysAreDurablyDeduplicated() throws {
     let repository = try SnapshotRepository.inMemory()
 

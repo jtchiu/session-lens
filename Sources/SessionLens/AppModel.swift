@@ -6,6 +6,7 @@ import SessionLensCore
 @MainActor
 final class AppModel: ObservableObject {
     @Published private(set) var snapshots: [ProviderID: ProviderSnapshot]
+    @Published private(set) var quotaHistory: [ProviderID: [QuotaHistoryPoint]]
     @Published var selectedProvider: ProviderID
     @Published private(set) var chartRange: UsageChartRange
     @Published private(set) var isRefreshing = false
@@ -26,6 +27,7 @@ final class AppModel: ObservableObject {
         notificationScheduler: any NotificationScheduling,
         settings: AppSettings,
         initialSnapshots: [ProviderID: ProviderSnapshot] = [:],
+        initialQuotaHistory: [ProviderID: [QuotaHistoryPoint]] = [:],
         selectedProvider: ProviderID = .codex,
         automaticRefreshEnabled: Bool = true,
         notificationEvaluator: NotificationEvaluator = NotificationEvaluator()
@@ -35,6 +37,7 @@ final class AppModel: ObservableObject {
         self.notificationScheduler = notificationScheduler
         self.settings = settings
         self.snapshots = initialSnapshots
+        self.quotaHistory = initialQuotaHistory
         self.selectedProvider = selectedProvider
         self.chartRange = settings.chartRange
         self.automaticRefreshEnabled = automaticRefreshEnabled
@@ -97,6 +100,7 @@ final class AppModel: ObservableObject {
             ),
             settings: settings,
             initialSnapshots: fixtureSnapshots,
+            initialQuotaHistory: PreviewFixtures.quotaHistory,
             selectedProvider: .codex,
             automaticRefreshEnabled: false
         )
@@ -132,6 +136,9 @@ final class AppModel: ObservableObject {
         let previous = snapshots
         let state = await coordinator.refresh(at: now)
         snapshots = state.snapshots
+        if automaticRefreshEnabled {
+            reloadQuotaHistory(now: now)
+        }
         guard settings.notificationsEnabled else { return }
 
         for provider in settings.providerOrder {
@@ -155,6 +162,7 @@ final class AppModel: ObservableObject {
     }
 
     func popoverDidOpen(now: Date = Date()) {
+        guard automaticRefreshEnabled else { return }
         guard let newest = snapshots.values.map(\.observedAt).max() else {
             refresh()
             return
@@ -243,6 +251,23 @@ final class AppModel: ObservableObject {
                 await refreshNow()
             }
         }
+    }
+
+    private func reloadQuotaHistory(now: Date) {
+        let start = now.addingTimeInterval(-5 * 3_600)
+        var refreshed: [ProviderID: [QuotaHistoryPoint]] = [:]
+        for (provider, snapshot) in snapshots {
+            let window = snapshot.quotaWindows.first(where: {
+                $0.durationMinutes == 10_080
+            }) ?? snapshot.quotaWindows.first
+            guard let duration = window?.durationMinutes else { continue }
+            refreshed[provider] = (try? repository.quotaHistory(
+                provider: provider,
+                durationMinutes: duration,
+                range: start...now
+            )) ?? []
+        }
+        quotaHistory = refreshed
     }
 
     private static func makeRepository() -> SnapshotRepository {

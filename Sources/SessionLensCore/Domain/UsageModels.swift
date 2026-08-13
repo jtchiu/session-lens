@@ -89,6 +89,27 @@ public struct UsageBucket: Codable, Hashable, Sendable, Identifiable {
     public var id: Date { day }
 }
 
+public struct QuotaHistoryPoint: Codable, Hashable, Sendable, Identifiable {
+    public let observedAt: Date
+    public let usedPercent: Double
+    public let resetsAt: Date?
+    public let provenance: MetricProvenance
+
+    public init(
+        observedAt: Date,
+        usedPercent: Double,
+        resetsAt: Date?,
+        provenance: MetricProvenance
+    ) {
+        self.observedAt = observedAt
+        self.usedPercent = min(100, max(0, usedPercent))
+        self.resetsAt = resetsAt
+        self.provenance = provenance
+    }
+
+    public var id: Date { observedAt }
+}
+
 public struct ModelUsage: Codable, Hashable, Sendable, Identifiable {
     public let providerID: String?
     public let modelID: String

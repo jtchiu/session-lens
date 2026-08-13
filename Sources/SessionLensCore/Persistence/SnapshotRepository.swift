@@ -177,6 +177,41 @@ public final class SnapshotRepository: SnapshotPersisting {
         }
     }
 
+    public func quotaHistory(
+        provider: ProviderID,
+        durationMinutes: Int?,
+        range: ClosedRange<Date>
+    ) throws -> [QuotaHistoryPoint] {
+        let request = SnapshotRecord.fetchRequest()
+        request.predicate = NSPredicate(
+            format: "providerRaw == %@ AND observedAt >= %@ AND observedAt <= %@",
+            provider.rawValue,
+            range.lowerBound as NSDate,
+            range.upperBound as NSDate
+        )
+        request.sortDescriptors = [
+            NSSortDescriptor(key: "observedAt", ascending: true)
+        ]
+
+        return try context.fetch(request).compactMap { record in
+            let windows = try decoder.decode(
+                [QuotaWindow].self,
+                from: record.quotaData
+            )
+            guard let window = windows.first(where: {
+                $0.durationMinutes == durationMinutes
+            }), let usedPercent = window.usedPercent else {
+                return nil
+            }
+            return QuotaHistoryPoint(
+                observedAt: record.observedAt,
+                usedPercent: usedPercent,
+                resetsAt: window.resetsAt,
+                provenance: window.provenance
+            )
+        }
+    }
+
     public func markNotification(_ key: String, at date: Date = Date()) throws {
         guard try fetchNotification(key: key) == nil else { return }
         let record = insertNotificationRecord()
