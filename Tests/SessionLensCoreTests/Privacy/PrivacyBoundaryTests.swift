@@ -109,6 +109,7 @@ struct PrivacyBoundaryTests {
             "modelDisplayName",
             "modelID",
             "observedAt",
+            "reportedSessionTokenTotal",
             "sessionHash",
             "sevenDay",
             "version",
@@ -119,6 +120,7 @@ struct PrivacyBoundaryTests {
             modelID: "claude-synthetic",
             modelDisplayName: "Synthetic Claude",
             estimatedSessionCostUSD: 1.25,
+            reportedSessionTokenTotal: 125,
             contextTokens: TokenBreakdown(
                 input: 100,
                 output: 20,

@@ -182,6 +182,7 @@ public struct ProviderSnapshot: Codable, Hashable, Sendable, Identifiable {
     public let quotaWindows: [QuotaWindow]
     public let modelBreakdowns: [ModelUsage]
     public let diagnostic: String?
+    public let costSample: ProviderSpendSample?
 
     public init(
         provider: ProviderID,
@@ -192,7 +193,8 @@ public struct ProviderSnapshot: Codable, Hashable, Sendable, Identifiable {
         dailyBuckets: [UsageBucket],
         quotaWindows: [QuotaWindow],
         modelBreakdowns: [ModelUsage],
-        diagnostic: String? = nil
+        diagnostic: String? = nil,
+        costSample: ProviderSpendSample? = nil
     ) {
         self.provider = provider
         self.observedAt = observedAt
@@ -203,6 +205,7 @@ public struct ProviderSnapshot: Codable, Hashable, Sendable, Identifiable {
         self.quotaWindows = quotaWindows
         self.modelBreakdowns = modelBreakdowns
         self.diagnostic = diagnostic
+        self.costSample = costSample
     }
 
     public var id: ProviderID { provider }

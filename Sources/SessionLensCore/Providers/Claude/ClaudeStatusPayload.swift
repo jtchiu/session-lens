@@ -14,6 +14,7 @@ public struct ClaudeNormalizedRateLimit: Codable, Hashable, Sendable {
 public struct ClaudeNormalizedCache: Codable, Hashable, Sendable {
     public static let allowedKeys: Set<String> = [
         "observedAt",
+        "reportedSessionTokenTotal",
         "sessionHash",
         "modelID",
         "modelDisplayName",
@@ -31,6 +32,7 @@ public struct ClaudeNormalizedCache: Codable, Hashable, Sendable {
     public let modelID: String?
     public let modelDisplayName: String?
     public let estimatedSessionCostUSD: Double?
+    public let reportedSessionTokenTotal: Int?
     public let contextTokens: TokenBreakdown?
     public let contextWindowSize: Int?
     public let contextUsedPercent: Double?
@@ -44,6 +46,7 @@ public struct ClaudeNormalizedCache: Codable, Hashable, Sendable {
         modelID: String?,
         modelDisplayName: String?,
         estimatedSessionCostUSD: Double?,
+        reportedSessionTokenTotal: Int? = nil,
         contextTokens: TokenBreakdown?,
         contextWindowSize: Int?,
         contextUsedPercent: Double?,
@@ -56,12 +59,82 @@ public struct ClaudeNormalizedCache: Codable, Hashable, Sendable {
         self.modelID = modelID
         self.modelDisplayName = modelDisplayName
         self.estimatedSessionCostUSD = estimatedSessionCostUSD
+        self.reportedSessionTokenTotal = reportedSessionTokenTotal.map { max(0, $0) }
         self.contextTokens = contextTokens
         self.contextWindowSize = contextWindowSize
         self.contextUsedPercent = contextUsedPercent
         self.fiveHour = fiveHour
         self.sevenDay = sevenDay
         self.version = version
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case observedAt
+        case sessionHash
+        case modelID
+        case modelDisplayName
+        case estimatedSessionCostUSD
+        case reportedSessionTokenTotal
+        case contextTokens
+        case contextWindowSize
+        case contextUsedPercent
+        case fiveHour
+        case sevenDay
+        case version
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        observedAt = try container.decode(Date.self, forKey: .observedAt)
+        sessionHash = try container.decode(String.self, forKey: .sessionHash)
+        modelID = try container.decodeIfPresent(String.self, forKey: .modelID)
+        modelDisplayName = try container.decodeIfPresent(String.self, forKey: .modelDisplayName)
+        estimatedSessionCostUSD = try container.decodeIfPresent(
+            Double.self,
+            forKey: .estimatedSessionCostUSD
+        )
+        if let reportedSessionTokenTotal = try container.decodeIfPresent(
+            Int.self,
+            forKey: .reportedSessionTokenTotal
+        ) {
+            self.reportedSessionTokenTotal = max(0, reportedSessionTokenTotal)
+        } else {
+            self.reportedSessionTokenTotal = nil
+        }
+        contextTokens = try container.decodeIfPresent(
+            TokenBreakdown.self,
+            forKey: .contextTokens
+        )
+        contextWindowSize = try container.decodeIfPresent(Int.self, forKey: .contextWindowSize)
+        contextUsedPercent = try container.decodeIfPresent(Double.self, forKey: .contextUsedPercent)
+        fiveHour = try container.decodeIfPresent(
+            ClaudeNormalizedRateLimit.self,
+            forKey: .fiveHour
+        )
+        sevenDay = try container.decodeIfPresent(
+            ClaudeNormalizedRateLimit.self,
+            forKey: .sevenDay
+        )
+        version = try container.decodeIfPresent(String.self, forKey: .version)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(observedAt, forKey: .observedAt)
+        try container.encode(sessionHash, forKey: .sessionHash)
+        try container.encodeIfPresent(modelID, forKey: .modelID)
+        try container.encodeIfPresent(modelDisplayName, forKey: .modelDisplayName)
+        try container.encodeIfPresent(estimatedSessionCostUSD, forKey: .estimatedSessionCostUSD)
+        try container.encodeIfPresent(
+            reportedSessionTokenTotal,
+            forKey: .reportedSessionTokenTotal
+        )
+        try container.encodeIfPresent(contextTokens, forKey: .contextTokens)
+        try container.encodeIfPresent(contextWindowSize, forKey: .contextWindowSize)
+        try container.encodeIfPresent(contextUsedPercent, forKey: .contextUsedPercent)
+        try container.encodeIfPresent(fiveHour, forKey: .fiveHour)
+        try container.encodeIfPresent(sevenDay, forKey: .sevenDay)
+        try container.encodeIfPresent(version, forKey: .version)
     }
 }
 
@@ -89,6 +162,7 @@ public struct ClaudeStatusPayload: Decodable, Sendable {
             modelID: model?.id,
             modelDisplayName: model?.displayName,
             estimatedSessionCostUSD: cost?.totalCostUSD.map { max(0, $0) },
+            reportedSessionTokenTotal: contextWindow?.reportedSessionTokenTotal,
             contextTokens: contextWindow?.normalizedTokens,
             contextWindowSize: contextWindow?.contextWindowSize.map { max(0, $0) },
             contextUsedPercent: contextWindow?.usedPercentage.map {
@@ -164,6 +238,15 @@ private extension ClaudeStatusPayload {
                 uncategorized: max(0, totalInputTokens ?? 0)
                     + max(0, totalOutputTokens ?? 0)
             )
+        }
+
+        var reportedSessionTokenTotal: Int? {
+            guard totalInputTokens != nil || totalOutputTokens != nil else {
+                return nil
+            }
+            let input = max(0, totalInputTokens ?? 0)
+            let output = max(0, totalOutputTokens ?? 0)
+            return input > Int.max - output ? Int.max : input + output
         }
     }
 

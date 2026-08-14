@@ -320,6 +320,7 @@ enum Fixtures {
         tokens: Int,
         sessionCostUSD: Double?,
         sessionHash: String = String(repeating: "a", count: 64),
+        reportedSessionTokenTotal: Int? = nil,
         observedAt: Date = now
     ) -> ClaudeNormalizedCache {
         ClaudeNormalizedCache(
@@ -328,6 +329,7 @@ enum Fixtures {
             modelID: "claude-opus-4-1",
             modelDisplayName: "Opus 4.1",
             estimatedSessionCostUSD: sessionCostUSD,
+            reportedSessionTokenTotal: reportedSessionTokenTotal,
             contextTokens: TokenBreakdown(
                 input: tokens,
                 output: 0,

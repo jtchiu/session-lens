@@ -45,6 +45,7 @@ struct ClaudeBridgeTests {
         #expect(cache.contextTokens?.cacheWrite == 5_000)
         #expect(cache.contextTokens?.cacheRead == 2_000)
         #expect(cache.contextTokens?.total == 16_700)
+        #expect(cache.reportedSessionTokenTotal == 16_700)
         #expect(cache.estimatedSessionCostUSD == 0.01234)
         #expect(cache.fiveHour?.usedPercent == 23.5)
         #expect(cache.sevenDay?.usedPercent == 41.2)
@@ -53,10 +54,15 @@ struct ClaudeBridgeTests {
 
     @Test
     func liveContextTokensAreNotMisrepresentedAsCumulativeDeltas() async {
+        let secondCache = Fixtures.claudeCache(
+            tokens: 140,
+            sessionCostUSD: 1.4,
+            reportedSessionTokenTotal: 140
+        )
         let store = FakeClaudeBridgeStore(
             caches: [
                 Fixtures.claudeCache(tokens: 100, sessionCostUSD: 1.0),
-                Fixtures.claudeCache(tokens: 140, sessionCostUSD: 1.4),
+                secondCache,
             ]
         )
         let provider = ClaudeProvider(store: store)
@@ -68,7 +74,36 @@ struct ClaudeBridgeTests {
 
         #expect(second.tokens?.total == 140)
         #expect(second.costDisplay == .estimatedUSD(1.4))
+        #expect(second.costSample?.provider == .claude)
+        #expect(second.costSample?.scopeID == secondCache.sessionHash)
+        #expect(second.costSample?.cumulativeCostUSD == 1.4)
+        #expect(second.costSample?.cumulativeTokens == 140)
         #expect(second.dailyBuckets.isEmpty)
+    }
+
+    @Test
+    func liveContextOnlyPayloadDoesNotCreateHistoricalTokenTotal() throws {
+        let payload = try JSONDecoder().decode(
+            ClaudeStatusPayload.self,
+            from: Data(
+                #"""
+                {
+                  "session_id": "session-secret",
+                  "cost": {"total_cost_usd": 1.0},
+                  "context_window": {
+                    "current_usage": {
+                      "input_tokens": 8500,
+                      "output_tokens": 1200,
+                      "cache_creation_input_tokens": 5000,
+                      "cache_read_input_tokens": 2000
+                    }
+                  }
+                }
+                """#.utf8
+            )
+        )
+
+        #expect(payload.normalized(observedAt: Fixtures.now).reportedSessionTokenTotal == nil)
     }
 
     @Test

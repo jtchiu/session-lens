@@ -71,6 +71,22 @@ public struct ClaudeProvider: UsageProvider {
         } else {
             modelBreakdowns = []
         }
+        let costSample: ProviderSpendSample?
+        if cache.sessionHash.isEmpty
+            || (cache.estimatedSessionCostUSD == nil
+                && cache.reportedSessionTokenTotal == nil)
+        {
+            costSample = nil
+        } else {
+            costSample = ProviderSpendSample(
+                provider: id,
+                observedAt: cache.observedAt,
+                scopeID: cache.sessionHash,
+                cumulativeCostUSD: cache.estimatedSessionCostUSD,
+                cumulativeTokens: cache.reportedSessionTokenTotal,
+                provenance: .estimated
+            )
+        }
 
         return ProviderSnapshot(
             provider: id,
@@ -80,7 +96,8 @@ public struct ClaudeProvider: UsageProvider {
             costDisplay: costDisplay,
             dailyBuckets: [],
             quotaWindows: quotas,
-            modelBreakdowns: modelBreakdowns
+            modelBreakdowns: modelBreakdowns,
+            costSample: costSample
         )
     }
 
