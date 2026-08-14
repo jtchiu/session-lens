@@ -50,11 +50,11 @@ final class SettingsRecord: NSManagedObject {
 }
 
 enum SessionLensPersistenceModel {
-    static func makeModel() -> NSManagedObjectModel {
+    static func makeModel(includeModelData: Bool = true) -> NSManagedObjectModel {
         let model = NSManagedObjectModel()
         model.versionIdentifiers = ["SessionLens-1"]
         model.entities = [
-            snapshotEntity(),
+            snapshotEntity(includeModelData: includeModelData),
             dailyUsageEntity(),
             spendSampleEntity(),
             notificationEntity(),
@@ -63,22 +63,30 @@ enum SessionLensPersistenceModel {
         return model
     }
 
-    private static func snapshotEntity() -> NSEntityDescription {
-        entity(
+    private static func snapshotEntity(
+        includeModelData: Bool
+    ) -> NSEntityDescription {
+        var attributes = [
+            attribute("key", .stringAttributeType),
+            attribute("providerRaw", .stringAttributeType),
+            attribute("observedAt", .dateAttributeType),
+            attribute("healthRaw", .stringAttributeType),
+            attribute("tokenData", .binaryDataAttributeType, optional: true),
+            attribute("costKindRaw", .stringAttributeType),
+            attribute("costUSD", .doubleAttributeType, optional: true),
+            attribute("costSampleData", .binaryDataAttributeType, optional: true),
+            attribute("quotaData", .binaryDataAttributeType),
+        ]
+        if includeModelData {
+            attributes.insert(
+                attribute("modelData", .binaryDataAttributeType, optional: true),
+                at: attributes.count - 1
+            )
+        }
+        return entity(
             named: "SnapshotRecord",
             managedObjectClass: SnapshotRecord.self,
-            attributes: [
-                attribute("key", .stringAttributeType),
-                attribute("providerRaw", .stringAttributeType),
-                attribute("observedAt", .dateAttributeType),
-                attribute("healthRaw", .stringAttributeType),
-                attribute("tokenData", .binaryDataAttributeType, optional: true),
-                attribute("costKindRaw", .stringAttributeType),
-                attribute("costUSD", .doubleAttributeType, optional: true),
-                attribute("costSampleData", .binaryDataAttributeType, optional: true),
-                attribute("modelData", .binaryDataAttributeType, optional: true),
-                attribute("quotaData", .binaryDataAttributeType),
-            ],
+            attributes: attributes,
             uniqueBy: ["key"]
         )
     }

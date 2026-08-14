@@ -79,6 +79,7 @@ struct ClaudeBridgeTests {
         #expect(second.costSample?.cumulativeCostUSD == 1.4)
         #expect(second.costSample?.cumulativeTokens == 140)
         #expect(second.dailyBuckets.isEmpty)
+        #expect(second.modelBreakdowns.first?.lastObservedAt == secondCache.observedAt)
     }
 
     @Test

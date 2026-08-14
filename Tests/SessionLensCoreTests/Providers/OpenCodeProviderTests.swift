@@ -18,7 +18,7 @@ struct OpenCodeProviderTests {
     }
 
     @Test
-    func providerNormalizesSqliteJSONRows() async {
+    func providerNormalizesSqliteJSONRows() async throws {
         let process = FakeProcessRunner(stdout: Fixtures.openCodeRowsJSON)
         let provider = OpenCodeProvider(
             databaseURL: Fixtures.openCodeDatabaseURL,
@@ -34,6 +34,12 @@ struct OpenCodeProviderTests {
         #expect(snapshot.costUSD == 1.25)
         #expect(snapshot.dailyBuckets.count == 2)
         #expect(snapshot.modelBreakdowns.count == 1)
+        let latestModelDate = try #require(
+            snapshot.modelBreakdowns.first?.lastObservedAt
+        )
+        #expect(Calendar.current.component(.year, from: latestModelDate) == 2025)
+        #expect(Calendar.current.component(.month, from: latestModelDate) == 1)
+        #expect(Calendar.current.component(.day, from: latestModelDate) == 2)
         #expect(snapshot.quotaWindows.isEmpty)
     }
 

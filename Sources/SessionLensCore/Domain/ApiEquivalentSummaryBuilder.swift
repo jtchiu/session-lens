@@ -88,7 +88,8 @@ private extension ApiEquivalentSummaryBuilder {
         catalogIsStale: Bool,
         codexModelID: String?
     ) -> (rate: ResolvedModelRate, proportions: TokenBreakdown?)? {
-        if let latest = snapshot?.modelBreakdowns.last,
+        if let snapshot,
+           let latest = latestModelUsage(in: snapshot),
            let resolved = ModelRateResolver.resolve(
                provider: provider,
                providerID: latest.providerID,
@@ -124,6 +125,19 @@ private extension ApiEquivalentSummaryBuilder {
             return nil
         }
         return (resolved, nil)
+    }
+
+    static func latestModelUsage(
+        in snapshot: ProviderSnapshot
+    ) -> ModelUsage? {
+        snapshot.modelBreakdowns.sorted { left, right in
+            let leftDate = left.lastObservedAt ?? snapshot.observedAt
+            let rightDate = right.lastObservedAt ?? snapshot.observedAt
+            if leftDate != rightDate {
+                return leftDate > rightDate
+            }
+            return left.id < right.id
+        }.first
     }
 
     static func value(

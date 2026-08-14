@@ -118,4 +118,16 @@ struct UsageModelsTests {
 
         #expect(tokens.total == 150)
     }
+
+    @Test
+    func modelUsageDecodesExistingMetadataWithoutRecency() throws {
+        let data = Data("""
+        {"providerID":"openai","modelID":"gpt-legacy","tokens":{"input":10,"output":0,"reasoning":0,"cacheRead":0,"cacheWrite":0},"costUSD":0.25}
+        """.utf8)
+
+        let usage = try JSONDecoder().decode(ModelUsage.self, from: data)
+
+        #expect(usage.modelID == "gpt-legacy")
+        #expect(usage.lastObservedAt == nil)
+    }
 }

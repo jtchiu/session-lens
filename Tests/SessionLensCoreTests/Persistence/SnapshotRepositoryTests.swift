@@ -1,3 +1,4 @@
+import CoreData
 import Foundation
 import Testing
 
@@ -128,6 +129,63 @@ struct SnapshotRepositoryTests {
     try repository.record(snapshot)
 
     #expect(try repository.latest(provider: .opencode)?.modelBreakdowns == [breakdown])
+  }
+
+  @Test
+  func persistentRepositoryReadsLegacySnapshotWithoutModelData() throws {
+    let rootURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("SessionLensLegacyTests-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: rootURL) }
+    let directoryURL = rootURL.appendingPathComponent("SessionLens", isDirectory: true)
+    try FileManager.default.createDirectory(
+      at: directoryURL,
+      withIntermediateDirectories: true
+    )
+    let storeURL = directoryURL.appendingPathComponent("usage.sqlite")
+    let legacyCoordinator = NSPersistentStoreCoordinator(
+      managedObjectModel: SessionLensPersistenceModel.makeModel(
+        includeModelData: false
+      )
+    )
+    let store = try legacyCoordinator.addPersistentStore(
+      type: .sqlite,
+      configuration: nil,
+      at: storeURL
+    )
+    let context = NSManagedObjectContext(
+      concurrencyType: .mainQueueConcurrencyType
+    )
+    context.persistentStoreCoordinator = legacyCoordinator
+    let record = NSEntityDescription.insertNewObject(
+      forEntityName: "SnapshotRecord",
+      into: context
+    ) as! SnapshotRecord
+    record.key = "codex:legacy"
+    record.providerRaw = ProviderID.codex.rawValue
+    record.observedAt = Fixtures.now
+    record.healthRaw = ProviderHealth.ready.rawValue
+    record.tokenData = try JSONEncoder().encode(
+      TokenBreakdown(
+        input: 0,
+        output: 0,
+        reasoning: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        uncategorized: 100
+      )
+    )
+    record.costKindRaw = "includedWithPlan"
+    record.costUSD = nil
+    record.costSampleData = nil
+    record.quotaData = try JSONEncoder().encode([QuotaWindow]())
+    try context.save()
+    try legacyCoordinator.remove(store)
+
+    let repository = try SnapshotRepository.persistent(
+      applicationSupportURL: rootURL
+    )
+
+    #expect(try repository.latest(provider: .codex)?.modelBreakdowns == [])
   }
 
   @Test

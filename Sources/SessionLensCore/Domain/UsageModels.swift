@@ -121,17 +121,39 @@ public struct ModelUsage: Codable, Hashable, Sendable, Identifiable {
     public let modelID: String
     public let tokens: TokenBreakdown
     public let costUSD: Double?
+    public let lastObservedAt: Date?
 
     public init(
         providerID: String?,
         modelID: String,
         tokens: TokenBreakdown,
-        costUSD: Double?
+        costUSD: Double?,
+        lastObservedAt: Date? = nil
     ) {
         self.providerID = providerID
         self.modelID = modelID
         self.tokens = tokens
         self.costUSD = costUSD
+        self.lastObservedAt = lastObservedAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case providerID
+        case modelID
+        case tokens
+        case costUSD
+        case lastObservedAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            providerID: try container.decodeIfPresent(String.self, forKey: .providerID),
+            modelID: try container.decode(String.self, forKey: .modelID),
+            tokens: try container.decode(TokenBreakdown.self, forKey: .tokens),
+            costUSD: try container.decodeIfPresent(Double.self, forKey: .costUSD),
+            lastObservedAt: try container.decodeIfPresent(Date.self, forKey: .lastObservedAt)
+        )
     }
 
     public var id: String {

@@ -231,6 +231,157 @@ struct SpendSummaryLoaderTests {
         #expect(summary.apiEquivalent.providers[.opencode]?.week.costUSD == nil)
         #expect(summary.apiEquivalent.combined.week.costUSD == nil)
     }
+
+    @Test
+    func selectsTheMostRecentlyObservedModelInsteadOfLexicalBreakdownOrder() {
+        let now = Self.date(2025, 1, 15)
+        let oldObservedAt = Self.date(2025, 1, 10)
+        let currentObservedAt = Self.date(2025, 1, 14)
+        let snapshot = ProviderSnapshot(
+            provider: .opencode,
+            observedAt: now,
+            health: .ready,
+            tokens: nil,
+            costDisplay: .exactUSD(11),
+            dailyBuckets: [],
+            quotaWindows: [],
+            modelBreakdowns: [
+                ModelUsage(
+                    providerID: "openai",
+                    modelID: "a-current-model",
+                    tokens: TokenBreakdown(
+                        input: 1_000_000,
+                        output: 0,
+                        reasoning: 0,
+                        cacheRead: 0,
+                        cacheWrite: 0
+                    ),
+                    costUSD: 10,
+                    lastObservedAt: currentObservedAt
+                ),
+                ModelUsage(
+                    providerID: "openai",
+                    modelID: "z-old-model",
+                    tokens: TokenBreakdown(
+                        input: 1_000_000,
+                        output: 0,
+                        reasoning: 0,
+                        cacheRead: 0,
+                        cacheWrite: 0
+                    ),
+                    costUSD: 1,
+                    lastObservedAt: oldObservedAt
+                ),
+            ]
+        )
+        let catalog = PricingCatalog(
+            models: [
+                PricingCatalogModel(
+                    providerID: "openai",
+                    modelID: "a-current-model",
+                    rate: PricingRate(inputPerMillion: 10)
+                ),
+                PricingCatalogModel(
+                    providerID: "openai",
+                    modelID: "z-old-model",
+                    rate: PricingRate(inputPerMillion: 1)
+                ),
+            ],
+            updatedAt: now,
+            fetchedAt: now
+        )
+
+        let summary = SpendSummaryLoader.makeSummary(
+            now: now,
+            historyRetentionDays: 30,
+            snapshots: [.opencode: snapshot],
+            dailyBuckets: [
+                .opencode: [
+                    UsageBucket(day: currentObservedAt, tokens: 1_000_000, costUSD: 11),
+                ]
+            ],
+            samples: [],
+            catalogState: PricingCatalogState(source: .live, catalog: catalog),
+            calendar: Self.calendar
+        )
+
+        #expect(summary.apiEquivalent.providers[.opencode]?.week.modelID == "a-current-model")
+        #expect(summary.apiEquivalent.providers[.opencode]?.week.costUSD == 10)
+        #expect(summary.apiEquivalent.providers[.opencode]?.week.coverage == .latestKnownModel)
+    }
+
+    @Test
+    func usesStableModelIDFallbackForLegacyBreakdownsWithoutRecency() {
+        let now = Self.date(2025, 1, 15)
+        let snapshot = ProviderSnapshot(
+            provider: .opencode,
+            observedAt: now,
+            health: .ready,
+            tokens: nil,
+            costDisplay: .exactUSD(11),
+            dailyBuckets: [],
+            quotaWindows: [],
+            modelBreakdowns: [
+                ModelUsage(
+                    providerID: "openai",
+                    modelID: "a-model",
+                    tokens: TokenBreakdown(
+                        input: 1_000_000,
+                        output: 0,
+                        reasoning: 0,
+                        cacheRead: 0,
+                        cacheWrite: 0
+                    ),
+                    costUSD: 10
+                ),
+                ModelUsage(
+                    providerID: "openai",
+                    modelID: "z-model",
+                    tokens: TokenBreakdown(
+                        input: 1_000_000,
+                        output: 0,
+                        reasoning: 0,
+                        cacheRead: 0,
+                        cacheWrite: 0
+                    ),
+                    costUSD: 1
+                ),
+            ]
+        )
+        let catalog = PricingCatalog(
+            models: [
+                PricingCatalogModel(
+                    providerID: "openai",
+                    modelID: "a-model",
+                    rate: PricingRate(inputPerMillion: 10)
+                ),
+                PricingCatalogModel(
+                    providerID: "openai",
+                    modelID: "z-model",
+                    rate: PricingRate(inputPerMillion: 1)
+                ),
+            ],
+            updatedAt: now,
+            fetchedAt: now
+        )
+
+        let summary = SpendSummaryLoader.makeSummary(
+            now: now,
+            historyRetentionDays: 30,
+            snapshots: [.opencode: snapshot],
+            dailyBuckets: [
+                .opencode: [
+                    UsageBucket(day: now, tokens: 1_000_000, costUSD: 11),
+                ]
+            ],
+            samples: [],
+            catalogState: PricingCatalogState(source: .live, catalog: catalog),
+            calendar: Self.calendar
+        )
+
+        #expect(summary.apiEquivalent.providers[.opencode]?.week.modelID == "a-model")
+        #expect(summary.apiEquivalent.providers[.opencode]?.week.costUSD == 10)
+    }
 }
 
 private extension SpendSummaryLoaderTests {

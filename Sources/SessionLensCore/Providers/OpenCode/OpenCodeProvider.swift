@@ -118,6 +118,7 @@ public struct OpenCodeProvider: UsageProvider {
         var total = OpenCodeAccumulator()
         var days: [Date: OpenCodeAccumulator] = [:]
         var models: [OpenCodeModelKey: OpenCodeAccumulator] = [:]
+        var lastObservedAtByModel: [OpenCodeModelKey: Date] = [:]
 
         for row in rows {
             guard let day = localDay(from: row.day) else {
@@ -132,6 +133,8 @@ public struct OpenCodeProvider: UsageProvider {
                     modelID: modelID
                 )
                 models[key, default: OpenCodeAccumulator()].add(row)
+                let existing = lastObservedAtByModel[key] ?? .distantPast
+                lastObservedAtByModel[key] = max(existing, day)
             }
         }
 
@@ -152,7 +155,8 @@ public struct OpenCodeProvider: UsageProvider {
                     providerID: key.providerID,
                     modelID: key.modelID,
                     tokens: aggregate.tokens,
-                    costUSD: aggregate.costUSD
+                    costUSD: aggregate.costUSD,
+                    lastObservedAt: lastObservedAtByModel[key]
                 )
             }
             .sorted { $0.id < $1.id }

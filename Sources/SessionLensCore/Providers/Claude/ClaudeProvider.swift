@@ -65,7 +65,8 @@ public struct ClaudeProvider: UsageProvider {
                     providerID: "anthropic",
                     modelID: modelID,
                     tokens: tokens,
-                    costUSD: cache.estimatedSessionCostUSD
+                    costUSD: cache.estimatedSessionCostUSD,
+                    lastObservedAt: cache.observedAt
                 )
             ]
         } else {
