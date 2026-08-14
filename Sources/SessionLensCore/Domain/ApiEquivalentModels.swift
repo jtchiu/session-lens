@@ -159,6 +159,14 @@ public struct ApiEquivalentPeriods: Codable, Hashable, Sendable {
         self.month = month
         self.retained = retained
     }
+
+    public static var unavailable: ApiEquivalentPeriods {
+        ApiEquivalentPeriods(
+            week: .unavailable,
+            month: .unavailable,
+            retained: .unavailable
+        )
+    }
 }
 
 public struct ApiEquivalentSummary: Codable, Hashable, Sendable {
@@ -174,5 +182,28 @@ public struct ApiEquivalentSummary: Codable, Hashable, Sendable {
         self.providers = providers
         self.combined = combined
         self.catalogState = catalogState
+    }
+
+    public static var unavailable: ApiEquivalentSummary {
+        ApiEquivalentSummary(
+            providers: [:],
+            combined: .unavailable,
+            catalogState: PricingCatalogState(
+                source: .unavailable,
+                catalog: nil
+            )
+        )
+    }
+}
+
+public extension ApiEquivalentValue {
+    static var unavailable: ApiEquivalentValue {
+        ApiEquivalentValue(
+            costUSD: nil,
+            tokens: nil,
+            coverage: .unavailable,
+            modelID: nil,
+            ratesAsOf: nil
+        )
     }
 }

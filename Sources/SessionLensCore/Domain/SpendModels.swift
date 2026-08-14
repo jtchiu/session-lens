@@ -115,15 +115,38 @@ public struct SpendSummary: Codable, Hashable, Sendable {
     public let providers: [ProviderID: ProviderSpendSummary]
     public let combined: SpendPeriods
     public let retentionDays: Int
+    public let apiEquivalent: ApiEquivalentSummary
 
     public init(
         providers: [ProviderID: ProviderSpendSummary],
         combined: SpendPeriods,
-        retentionDays: Int
+        retentionDays: Int,
+        apiEquivalent: ApiEquivalentSummary = .unavailable
     ) {
         self.providers = providers
         self.combined = combined
         self.retentionDays = max(1, retentionDays)
+        self.apiEquivalent = apiEquivalent
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case providers
+        case combined
+        case retentionDays
+        case apiEquivalent
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            providers: try container.decode([ProviderID: ProviderSpendSummary].self, forKey: .providers),
+            combined: try container.decode(SpendPeriods.self, forKey: .combined),
+            retentionDays: try container.decode(Int.self, forKey: .retentionDays),
+            apiEquivalent: try container.decodeIfPresent(
+                ApiEquivalentSummary.self,
+                forKey: .apiEquivalent
+            ) ?? .unavailable
+        )
     }
 
     public static func empty(

@@ -100,6 +100,37 @@ struct SnapshotRepositoryTests {
   }
 
   @Test
+  func repositoryRoundTripsNormalizedModelBreakdowns() throws {
+    let repository = try SnapshotRepository.inMemory()
+    let breakdown = ModelUsage(
+      providerID: "openai",
+      modelID: "gpt-5",
+      tokens: TokenBreakdown(
+        input: 100,
+        output: 50,
+        reasoning: 20,
+        cacheRead: 10,
+        cacheWrite: 5
+      ),
+      costUSD: 0.42
+    )
+    let snapshot = ProviderSnapshot(
+      provider: .opencode,
+      observedAt: Fixtures.now,
+      health: .ready,
+      tokens: breakdown.tokens,
+      costDisplay: .exactUSD(0.42),
+      dailyBuckets: [],
+      quotaWindows: [],
+      modelBreakdowns: [breakdown]
+    )
+
+    try repository.record(snapshot)
+
+    #expect(try repository.latest(provider: .opencode)?.modelBreakdowns == [breakdown])
+  }
+
+  @Test
   func persistentRepositoryUsesLocalSQLiteStore() throws {
     let rootURL = FileManager.default.temporaryDirectory
       .appendingPathComponent("SessionLensTests-\(UUID().uuidString)")

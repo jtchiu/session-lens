@@ -63,6 +63,7 @@ struct PrivacyBoundaryTests {
             "day",
             "healthRaw",
             "key",
+            "modelData",
             "observedAt",
             "providerRaw",
             "provenanceRaw",

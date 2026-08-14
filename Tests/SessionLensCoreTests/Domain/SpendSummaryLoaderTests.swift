@@ -72,6 +72,165 @@ struct SpendSummaryLoaderTests {
         #expect(summary.providers[.codex]?.week.provenance == .includedWithPlan)
         #expect(summary.combined.week.costUSD == 3)
     }
+
+    @Test
+    func keepsActualSpendSeparateWhileEstimatingCodexAndLeavingUnknownModelsUnavailable() {
+        let now = Self.date(2025, 1, 15)
+        let codexSnapshot = ProviderSnapshot(
+            provider: .codex,
+            observedAt: now,
+            health: .ready,
+            tokens: nil,
+            costDisplay: .includedWithPlan,
+            dailyBuckets: [],
+            quotaWindows: [],
+            modelBreakdowns: []
+        )
+        let unknownModelSnapshot = ProviderSnapshot(
+            provider: .opencode,
+            observedAt: now,
+            health: .ready,
+            tokens: nil,
+            costDisplay: .exactUSD(9),
+            dailyBuckets: [],
+            quotaWindows: [],
+            modelBreakdowns: [
+                ModelUsage(
+                    providerID: "openai",
+                    modelID: "unknown-model",
+                    tokens: TokenBreakdown(
+                        input: 3,
+                        output: 1,
+                        reasoning: 0,
+                        cacheRead: 0,
+                        cacheWrite: 0
+                    ),
+                    costUSD: 9
+                )
+            ]
+        )
+        let catalog = PricingCatalog(
+            models: [
+                PricingCatalogModel(
+                    providerID: "openai",
+                    modelID: "gpt-codex",
+                    rate: PricingRate(inputPerMillion: 1, outputPerMillion: 3)
+                )
+            ],
+            updatedAt: now,
+            fetchedAt: now
+        )
+
+        let summary = SpendSummaryLoader.makeSummary(
+            now: now,
+            historyRetentionDays: 30,
+            snapshots: [
+                .codex: codexSnapshot,
+                .opencode: unknownModelSnapshot,
+            ],
+            dailyBuckets: [
+                .codex: [
+                    UsageBucket(day: Self.date(2025, 1, 14), tokens: 1_000_000, costUSD: nil),
+                    UsageBucket(day: Self.date(2025, 1, 10), tokens: 2_000_000, costUSD: nil),
+                ],
+                .opencode: [
+                    UsageBucket(day: Self.date(2025, 1, 14), tokens: 500_000, costUSD: 9),
+                ],
+            ],
+            samples: [],
+            catalogState: PricingCatalogState(source: .cached, catalog: catalog),
+            codexModelID: "gpt-codex",
+            calendar: Self.calendar
+        )
+
+        #expect(summary.providers[.codex]?.week.costUSD == nil)
+        #expect(summary.providers[.codex]?.month.costUSD == nil)
+        #expect(summary.providers[.codex]?.retained.costUSD == nil)
+        #expect(summary.providers[.codex]?.week.tokens == 1_000_000)
+        #expect(summary.providers[.codex]?.month.tokens == 3_000_000)
+        #expect(summary.providers[.codex]?.retained.tokens == 3_000_000)
+        #expect(summary.combined.week.costUSD == 9)
+
+        #expect(summary.apiEquivalent.providers[.codex]?.week.costUSD == 2)
+        #expect(summary.apiEquivalent.providers[.codex]?.month.costUSD == 6)
+        #expect(summary.apiEquivalent.providers[.codex]?.retained.costUSD == 6)
+        #expect(summary.apiEquivalent.providers[.codex]?.week.coverage == .detectedProviderModel)
+        #expect(summary.apiEquivalent.providers[.opencode]?.week.costUSD == nil)
+        #expect(summary.apiEquivalent.providers[.opencode]?.week.coverage == .unavailable)
+        #expect(summary.apiEquivalent.combined.week.costUSD == 2)
+    }
+
+    @Test
+    func decodesLegacySummaryWithoutApiEquivalentData() throws {
+        let encoded = try JSONEncoder().encode(
+            SpendSummary.empty(retentionDays: 30)
+        )
+        var object = try #require(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+        object.removeValue(forKey: "apiEquivalent")
+        let data = try JSONSerialization.data(withJSONObject: object)
+
+        let summary = try JSONDecoder().decode(SpendSummary.self, from: data)
+
+        #expect(summary.apiEquivalent == .unavailable)
+    }
+
+    @Test
+    func doesNotTurnUnpricedTokenCategoriesIntoZeroDollarEstimates() {
+        let now = Self.date(2025, 1, 15)
+        let snapshot = ProviderSnapshot(
+            provider: .opencode,
+            observedAt: now,
+            health: .ready,
+            tokens: nil,
+            costDisplay: .exactUSD(7),
+            dailyBuckets: [],
+            quotaWindows: [],
+            modelBreakdowns: [
+                ModelUsage(
+                    providerID: "openai",
+                    modelID: "output-only-model",
+                    tokens: TokenBreakdown(
+                        input: 1_000_000,
+                        output: 0,
+                        reasoning: 0,
+                        cacheRead: 0,
+                        cacheWrite: 0
+                    ),
+                    costUSD: 7
+                )
+            ]
+        )
+        let catalog = PricingCatalog(
+            models: [
+                PricingCatalogModel(
+                    providerID: "openai",
+                    modelID: "output-only-model",
+                    rate: PricingRate(outputPerMillion: 3)
+                )
+            ],
+            updatedAt: now,
+            fetchedAt: now
+        )
+
+        let summary = SpendSummaryLoader.makeSummary(
+            now: now,
+            historyRetentionDays: 30,
+            snapshots: [.opencode: snapshot],
+            dailyBuckets: [
+                .opencode: [
+                    UsageBucket(day: Self.date(2025, 1, 14), tokens: 1_000_000, costUSD: 7),
+                ]
+            ],
+            samples: [],
+            catalogState: PricingCatalogState(source: .live, catalog: catalog),
+            calendar: Self.calendar
+        )
+
+        #expect(summary.apiEquivalent.providers[.opencode]?.week.costUSD == nil)
+        #expect(summary.apiEquivalent.combined.week.costUSD == nil)
+    }
 }
 
 private extension SpendSummaryLoaderTests {

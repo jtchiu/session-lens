@@ -7,6 +7,11 @@ public enum SpendSummaryLoader {
         snapshots: [ProviderID: ProviderSnapshot],
         dailyBuckets: [ProviderID: [UsageBucket]],
         samples: [ProviderSpendSample],
+        catalogState: PricingCatalogState = PricingCatalogState(
+            source: .unavailable,
+            catalog: nil
+        ),
+        codexModelID: String? = nil,
         calendar: Calendar = .current
     ) -> SpendSummary {
         let sampleProviders = Set(samples.map(\.provider))
@@ -43,11 +48,25 @@ public enum SpendSummaryLoader {
             }
         }
 
-        return SpendAggregator.makeSummary(
+        let summary = SpendAggregator.makeSummary(
             now: now,
             historyRetentionDays: historyRetentionDays,
             sources: sources,
             calendar: calendar
+        )
+        return SpendSummary(
+            providers: summary.providers,
+            combined: summary.combined,
+            retentionDays: summary.retentionDays,
+            apiEquivalent: ApiEquivalentSummaryBuilder.make(
+                summary: summary,
+                snapshots: snapshots,
+                catalog: catalogState.catalog,
+                catalogState: catalogState,
+                codexModelID: codexModelID,
+                now: now,
+                calendar: calendar
+            )
         )
     }
 }

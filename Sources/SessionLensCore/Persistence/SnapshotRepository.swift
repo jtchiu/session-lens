@@ -114,6 +114,7 @@ public final class SnapshotRepository: SnapshotPersisting {
         record.costSampleData = try snapshot.costSample.map {
             try encoder.encode($0)
         }
+        record.modelData = try encoder.encode(snapshot.modelBreakdowns)
         record.quotaData = quotaData
 
         if let costSample = snapshot.costSample {
@@ -157,6 +158,9 @@ public final class SnapshotRepository: SnapshotPersisting {
         let costSample = try record.costSampleData.map {
             try decoder.decode(ProviderSpendSample.self, from: $0)
         }
+        let modelBreakdowns = try record.modelData.map {
+            try decoder.decode([ModelUsage].self, from: $0)
+        } ?? []
         let dailyBuckets = try dailyUsage(
             provider: storedProvider,
             range: Date.distantPast...Date.distantFuture
@@ -170,7 +174,7 @@ public final class SnapshotRepository: SnapshotPersisting {
             costDisplay: costDisplay,
             dailyBuckets: dailyBuckets,
             quotaWindows: quotas,
-            modelBreakdowns: [],
+            modelBreakdowns: modelBreakdowns,
             costSample: costSample
         )
     }

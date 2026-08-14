@@ -11,6 +11,7 @@ final class SnapshotRecord: NSManagedObject {
     @NSManaged var costKindRaw: String
     @NSManaged var costUSD: NSNumber?
     @NSManaged var costSampleData: Data?
+    @NSManaged var modelData: Data?
     @NSManaged var quotaData: Data
 }
 
@@ -75,6 +76,7 @@ enum SessionLensPersistenceModel {
                 attribute("costKindRaw", .stringAttributeType),
                 attribute("costUSD", .doubleAttributeType, optional: true),
                 attribute("costSampleData", .binaryDataAttributeType, optional: true),
+                attribute("modelData", .binaryDataAttributeType, optional: true),
                 attribute("quotaData", .binaryDataAttributeType),
             ],
             uniqueBy: ["key"]
