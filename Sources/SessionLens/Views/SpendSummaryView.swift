@@ -9,9 +9,17 @@ struct SpendSummaryView: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      HStack(alignment: .firstTextBaseline) {
-        Text("Spend & effectiveness")
-          .font(.system(size: 13, weight: .semibold))
+      HStack(alignment: .top) {
+        VStack(alignment: .leading, spacing: 1) {
+          Text("Spend & effectiveness")
+            .font(.system(size: 13, weight: .semibold))
+          Text(pricingStatus)
+            .font(.system(size: 9))
+            .foregroundStyle(pricingStatusColor)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+            .accessibilityLabel(pricingStatus)
+        }
         Spacer()
         Text("Retained (summary.retentionDays)d")
           .font(.system(size: 9))
@@ -58,24 +66,56 @@ struct SpendSummaryView: View {
   }
 
   private func providerRow(_ row: ProviderSpendSummary) -> some View {
-    HStack(spacing: SessionLensSpacing.xSmall) {
+    let apiEquivalent = summary.apiEquivalent.providers[row.provider] ?? .unavailable
+    return HStack(spacing: SessionLensSpacing.xSmall) {
       providerLabel(row.provider)
-      spendCell(row.provider.displayName, period: "This week", value: row.week)
-      spendCell(row.provider.displayName, period: "This month", value: row.month)
-      spendCell(row.provider.displayName, period: "Total retained", value: row.retained)
+      spendCell(
+        row.provider.displayName,
+        period: "This week",
+        value: row.week,
+        apiEquivalent: apiEquivalent.week
+      )
+      spendCell(
+        row.provider.displayName,
+        period: "This month",
+        value: row.month,
+        apiEquivalent: apiEquivalent.month
+      )
+      spendCell(
+        row.provider.displayName,
+        period: "Total retained",
+        value: row.retained,
+        apiEquivalent: apiEquivalent.retained
+      )
     }
-    .frame(minHeight: 45)
+    .frame(minHeight: 57)
   }
 
   private var combinedRow: some View {
-    HStack(spacing: SessionLensSpacing.xSmall) {
+    let apiEquivalent = summary.apiEquivalent.combined
+    return HStack(spacing: SessionLensSpacing.xSmall) {
       providerLabel("Combined", color: .primary)
-      spendCell("Combined", period: "This week", value: summary.combined.week)
-      spendCell("Combined", period: "This month", value: summary.combined.month)
-      spendCell("Combined", period: "Total retained", value: summary.combined.retained)
+      spendCell(
+        "Combined",
+        period: "This week",
+        value: summary.combined.week,
+        apiEquivalent: apiEquivalent.week
+      )
+      spendCell(
+        "Combined",
+        period: "This month",
+        value: summary.combined.month,
+        apiEquivalent: apiEquivalent.month
+      )
+      spendCell(
+        "Combined",
+        period: "Total retained",
+        value: summary.combined.retained,
+        apiEquivalent: apiEquivalent.retained
+      )
     }
     .font(.system(size: 10, weight: .semibold))
-    .frame(minHeight: 45)
+    .frame(minHeight: 57)
   }
 
   private func providerLabel(
@@ -112,27 +152,63 @@ struct SpendSummaryView: View {
   private func spendCell(
     _ provider: String,
     period: String,
-    value: SpendValue
+    value: SpendValue,
+    apiEquivalent: ApiEquivalentValue
   ) -> some View {
     VStack(alignment: .trailing, spacing: 1) {
       Text(SpendFormatting.costText(value))
         .lineLimit(1)
         .minimumScaleFactor(0.7)
         .monospacedDigit()
-      Text(SpendFormatting.efficiencyText(value))
+      Text(SpendFormatting.apiEquivalentText(apiEquivalent))
         .foregroundStyle(.secondary)
         .lineLimit(1)
-        .minimumScaleFactor(0.7)
+        .minimumScaleFactor(0.55)
+        .monospacedDigit()
+      Text(tokenLineText(value: value, apiEquivalent: apiEquivalent))
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .minimumScaleFactor(0.5)
         .monospacedDigit()
     }
     .frame(width: 76, alignment: .trailing)
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(
-      SpendFormatting.accessibilityLabel(
+      SpendFormatting.comparisonAccessibilityLabel(
         provider: provider,
         period: period,
-        value: value
+        actual: value,
+        apiEquivalent: apiEquivalent
       )
     )
+  }
+
+  private func tokenLineText(
+    value: SpendValue,
+    apiEquivalent: ApiEquivalentValue
+  ) -> String {
+    let tokenText = SpendFormatting.tokenText(apiEquivalent.tokens ?? value.tokens)
+    let efficiency = SpendFormatting.efficiencyText(value)
+    guard efficiency != "—" else { return tokenText }
+    return "\(tokenText) · \(efficiency)"
+  }
+
+  private var pricingStatus: String {
+    let state = summary.apiEquivalent.catalogState
+    let source = switch state.source {
+    case .live: "Live pricing"
+    case .cached: "Cached pricing"
+    case .unavailable: "Pricing unavailable"
+    }
+    guard let ratesAsOf = state.ratesAsOf else { return source }
+    return "\(source) · Rates as of \(ratesAsOf.formatted(date: .abbreviated, time: .omitted))"
+  }
+
+  private var pricingStatusColor: Color {
+    switch summary.apiEquivalent.catalogState.source {
+    case .live: return .secondary
+    case .cached: return .orange
+    case .unavailable: return .secondary
+    }
   }
 }

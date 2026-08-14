@@ -1,6 +1,6 @@
 # SessionLens
 
-SessionLens is a free, local-only macOS menu-bar utility inspired by SessionWatcher. It is a personal SwiftUI app for OpenCode, Claude Code, and Codex usage, costs, quota windows, history, charts, and optional notifications. It has no license key, subscription, backend, or telemetry.
+SessionLens is a free, local-first macOS menu-bar utility inspired by SessionWatcher. It is a personal SwiftUI app for OpenCode, Claude Code, and Codex usage, costs, quota windows, history, charts, API-equivalent comparisons, and optional notifications. It has no license key, subscription, app-owned backend, or telemetry.
 
 The project is available under the [MIT License](LICENSE).
 
@@ -13,7 +13,7 @@ The project is available under the [MIT License](LICENSE).
 
 ## What SessionLens never reads
 
-SessionLens never reads prompts, source code, transcript/message content, diffs, project files, credentials, API keys, or provider databases outside the documented aggregate fields. It does not call a network API, ship data to a service, or use a remote analytics SDK. The only provider configuration file it touches is `~/.claude/settings.json`, and only for the explicitly confirmed bridge install/uninstall flow.
+SessionLens never reads prompts, source code, transcript/message content, diffs, project files, credentials, API keys, or provider databases outside the documented aggregate fields. Its only network request is a fixed HTTPS public model-pricing catalog used to calculate API-equivalent estimates; that request contains no usage data, prompts, credentials, account identity, or project paths. SessionLens does not ship usage data to a service or use a remote analytics SDK. The only provider configuration file it touches is `~/.claude/settings.json`, and only for the explicitly confirmed bridge install/uninstall flow.
 
 ## Requirements
 
@@ -57,7 +57,7 @@ Codex quota windows are detection-only: SessionLens shows a 5-hour window only w
 
 ## Spend comparison
 
-The popover includes a local **Spend & effectiveness** comparison for OpenCode, Claude Code, Codex, and the combined total. It shows this week, this month, and the retained-history total, plus tokens per dollar when cumulative token data is trustworthy. OpenCode uses exact aggregate pricing, Claude uses clearly labeled estimated API-token pricing, and Codex is shown as **Included with plan** without inventing a dollar amount. Spend samples are stored locally and follow the configured history retention.
+The popover includes a local **Spend & effectiveness** comparison for OpenCode, Claude Code, Codex, and the combined total. Each period shows the provider-reported actual spend, measured tokens, and a separate **API eq.** estimate: what those tokens would cost at the detected model's public metered rates. OpenCode and Claude retain their existing exact/estimated actual-spend provenance; Codex remains **Included with plan** for actual spend while its hypothetical API equivalent is clearly labeled as an estimate. Pricing status is shown as live, cached, or unavailable with the catalog rates-as-of date. Usage, spend samples, and model metadata stay local and follow the configured history retention.
 
 ## Notifications
 
@@ -65,7 +65,7 @@ Notifications are disabled by default. Enable them in Settings to request macOS 
 
 ## Local data and clearing history
 
-Normalized history is stored at `~/Library/Application Support/SessionLens/usage.sqlite`; Claude bridge metadata and cache live under `~/Library/Application Support/SessionLens/Bridge`. Settings control the 60-second default refresh interval and retention. Fine-grained quota observations are retained for at most 90 days, daily aggregates follow the selected retention, and notification crossing keys are pruned with that same local retention. **Clear History** asks for confirmation and deletes only SessionLens usage, quota-history, and notification records; it does not touch provider data or Claude settings.
+Normalized history is stored at `~/Library/Application Support/SessionLens/usage.sqlite`; Claude bridge metadata and cache live under `~/Library/Application Support/SessionLens/Bridge`; the normalized public pricing catalog is cached separately under SessionLens Application Support. Settings control the 60-second default refresh interval and retention. Fine-grained quota observations are retained for at most 90 days, daily aggregates follow the selected retention, and notification crossing keys are pruned with that same local retention. **Clear History** asks for confirmation and deletes only SessionLens usage, quota-history, and notification records; it does not touch provider data, Claude settings, or the public pricing cache.
 
 ## Verification
 
@@ -76,6 +76,8 @@ swift package clean
 swift test
 zsh scripts/package_app.sh
 zsh scripts/verify_bundle.sh dist/SessionLens.app
-if rg -n 'URLSession|import Network|NWConnection|CFHTTP' Sources; then exit 1; fi
+rg -n 'https?://' Sources/SessionLensCore Sources/SessionLens
 git diff --check
 ```
+
+The source URL check should report only the fixed public pricing endpoint (`https://models.dev/api.json`).

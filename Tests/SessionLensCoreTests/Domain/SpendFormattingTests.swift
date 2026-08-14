@@ -1,9 +1,50 @@
+import Foundation
 import Testing
 
 @testable import SessionLensCore
 
 @Suite
 struct SpendFormattingTests {
+    @Test
+    func formatsIncludedPlanAndApiEquivalentSeparately() {
+        let value = ApiEquivalentValue(
+            costUSD: 12.4,
+            tokens: 3_400_000,
+            coverage: .detectedProviderModel,
+            modelID: "codex-model",
+            ratesAsOf: nil
+        )
+
+        #expect(SpendFormatting.apiEquivalentText(value) == "API eq. ~$12.40")
+        #expect(SpendFormatting.coverageText(value) == "Detected model estimate")
+    }
+
+    @Test
+    func comparisonAccessibilityLabelNamesActualApiTokensAndRatesDate() {
+        let label = SpendFormatting.comparisonAccessibilityLabel(
+            provider: .codex,
+            period: "This week",
+            actual: SpendValue(
+                costUSD: nil,
+                tokens: 3_400_000,
+                provenance: .includedWithPlan
+            ),
+            apiEquivalent: ApiEquivalentValue(
+                costUSD: 12.4,
+                tokens: 3_400_000,
+                coverage: .detectedProviderModel,
+                modelID: "codex-model",
+                ratesAsOf: Date(timeIntervalSince1970: 0)
+            )
+        )
+
+        #expect(label.contains("Actual spend: Included with plan"))
+        #expect(label.contains("API equivalent: API eq. ~$12.40"))
+        #expect(label.contains("3,400,000 tokens"))
+        #expect(label.contains("Detected model estimate"))
+        #expect(label.contains("Rates as of"))
+    }
+
     @Test
     func formatsCostEfficiencyAndProvenanceWithoutFabricatingValues() {
         #expect(

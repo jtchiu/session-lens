@@ -9,9 +9,9 @@
 
 ## Allowed visible copy
 
-Popover copy is limited to: `OpenCode`, `Claude`, `Codex`, `5-hour`, `Weekly`, `resets`, `Remaining`, `Depleted`, `Exact provider quota`, `Local budget`, `Quota unavailable`, `Quota Remaining`, `of weekly limit`, `Daily Usage`, `7d`, `30d`, `90d`, `Token Usage`, `Token Detail`, `Model Breakdown`, `Input`, `Output`, `Reasoning`, `Cache read`, `Cache write`, `Today`, `Last 7 Days`, `Cost`, `Included with plan`, `Updated just now`, `Settings`, `Quit`, availability and error explanations, localized dates, normalized token counts, normalized currency totals, percentages, and reset countdowns.
+Popover copy is limited to: `OpenCode`, `Claude`, `Codex`, `5-hour`, `Weekly`, `resets`, `Remaining`, `Depleted`, `Exact provider quota`, `Local budget`, `Quota unavailable`, `Quota Remaining`, `of weekly limit`, `Daily Usage`, `7d`, `30d`, `90d`, `Token Usage`, `Token Detail`, `Model Breakdown`, `Input`, `Output`, `Reasoning`, `Cache read`, `Cache write`, `Today`, `Last 7 Days`, `Cost`, `Spend & effectiveness`, `Included with plan`, `API eq.`, `tokens`, `Live pricing`, `Cached pricing`, `Pricing unavailable`, `API equivalent unavailable`, `Rates as of`, `Updated just now`, `Settings`, `Quit`, availability and error explanations, localized dates, normalized token counts, normalized currency totals, percentages, and reset countdowns.
 
-Settings copy is limited to: `SessionLens`, `General`, `Providers`, `Menu Bar`, `Notifications`, `Privacy`, `Local, read-only usage sources.`, `Detected`, `Not installed`, `Connected`, `Configure Mapping`, `Install Bridge`, `Uninstall Bridge`, `Manual Resolution`, `Local budget`, `Permission`, `Not requested`, `Authorized`, `Denied`, `Open System Settings`, `Refresh`, `Aggregate tokens and cost from the local session database.`, `Install a privacy bridge to receive usage and quota metadata.`, `Exact account usage and rate limits through the local app-server.`, `Weekly`, `Only aggregate usage metadata is stored. Prompts, source code, credentials, and project paths are never read.`, `Learn More`, plus native labels for refresh interval, chart range, menu-bar display, notification thresholds, launch at login, retention, bridge confirmation, history deletion confirmation, and source-specific failure states.
+Settings copy is limited to: `SessionLens`, `General`, `Providers`, `Menu Bar`, `Notifications`, `Privacy`, `Local, read-only usage sources.`, `Detected`, `Not installed`, `Connected`, `Configure Mapping`, `Install Bridge`, `Uninstall Bridge`, `Manual Resolution`, `Local budget`, `Permission`, `Not requested`, `Authorized`, `Denied`, `Open System Settings`, `Refresh`, `Aggregate tokens and cost from the local session database.`, `Install a privacy bridge to receive usage and quota metadata.`, `Exact account usage and rate limits through the local app-server.`, `Weekly`, `Aggregate usage metadata stays on this Mac. Public model pricing metadata may be fetched for API-equivalent estimates; prompts, source code, credentials, and project paths are never read.`, `Public model pricing is fetched only for API-equivalent estimates; usage data stays on this Mac.`, `Prompts, source code, credentials, and project paths are never sent or stored.`, `No analytics, licensing, cloud sync, or app-owned backend.`, `Learn More`, plus native labels for refresh interval, chart range, menu-bar display, notification thresholds, launch at login, retention, bridge confirmation, history deletion confirmation, and source-specific failure states.
 
 Never show prompts, source code, message excerpts, credentials, project paths, account identifiers, raw provider payloads, marketing copy, upgrade prompts, license copy, advertisements, or SessionWatcher product text or marks.
 
@@ -85,7 +85,7 @@ Use SF Symbols for all code-native interface icons:
 
 - Provider selector: unavailable, available, selected, stale, refreshing, and failed. Selection uses an accent underline/fill and text weight; availability uses a dot plus an accessibility label.
 - Quota summary: exact, estimated, unavailable, and stale. Estimated values must carry `Estimated`; unavailable values use an em dash and explanation.
-- Metric rows: normalized value, included-plan cost, locally calculated cost, and unavailable.
+- Metric rows: normalized value, included-plan cost, API-equivalent estimate, measured token count, locally calculated cost, and unavailable.
 - Chart: populated, zero usage, insufficient history, and stale. Empty states retain axes/layout so the surface does not jump.
 - Source row: detected/connected, not installed, permission denied, incompatible schema, command unavailable, and transient failure.
 - Buttons: normal, hover, pressed, keyboard-focused, disabled, and in-progress. Destructive Clear History uses the native destructive role and confirmation.
@@ -110,7 +110,7 @@ Use SF Symbols for all code-native interface icons:
 
 ## Intentional differences from SessionWatcher
 
-- SessionLens is an original, free, local-only personal utility with no licensing, account, payment, upgrade, telemetry, or remote service surface.
+- SessionLens is an original, free, local-first personal utility with no licensing, account, payment, upgrade, telemetry, or app-owned remote service surface. It fetches only public model-pricing metadata for API-equivalent estimates.
 - It begins with OpenCode, Claude Code, and Codex and uses their documented/local aggregate interfaces rather than copying another product's integrations.
 - Branding, aperture-and-bars mark, icon geometry, provider colors, layout proportions, copy, and implementation are original.
 - Provider provenance and privacy boundaries are visible in Settings, while the popover remains compact.

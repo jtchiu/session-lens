@@ -202,7 +202,7 @@ private struct SettingsSidebar: View {
 
       Spacer()
 
-      Text("Free · Local only")
+      Text("Free · Local history")
         .font(.caption)
         .foregroundStyle(.secondary)
         .padding(SessionLensSpacing.large)
@@ -378,7 +378,7 @@ private struct ProviderSettingsView: View {
           .foregroundStyle(.secondary)
         VStack(alignment: .leading, spacing: SessionLensSpacing.xSmall) {
           Text(
-            "Only aggregate usage metadata is stored. Prompts, source code, credentials, and project paths are never read."
+            "Aggregate usage metadata stays on this Mac. Public model pricing metadata may be fetched for API-equivalent estimates; prompts, source code, credentials, and project paths are never read."
           )
           .foregroundStyle(.primary)
           Text("Learn More")
@@ -848,11 +848,16 @@ private struct PrivacySettingsView: View {
 
       SettingsSurface {
         Label(
-          "No analytics, licensing, cloud sync, or app-owned backend.", systemImage: "network.slash"
+          "Public model pricing is fetched only for API-equivalent estimates; usage data stays on this Mac.",
+          systemImage: "network"
         )
         Label(
-          "Prompts, source code, credentials, and project paths are never stored.",
+          "Prompts, source code, credentials, and project paths are never sent or stored.",
           systemImage: "lock.shield")
+        Label(
+          "No analytics, licensing, cloud sync, or app-owned backend.",
+          systemImage: "network.slash"
+        )
 
         LabeledContent("Local storage") {
           Text(storagePath)

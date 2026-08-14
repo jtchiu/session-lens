@@ -6,17 +6,19 @@
 
 ## 1. Goal
 
-Add a local, provider-by-provider view of cumulative API-token spend so the user can compare OpenCode, Claude Code, and Codex subscriptions at a glance.
+Add a local, provider-by-provider view of cumulative API-token consumption and a hypothetical metered-API equivalent so the user can compare OpenCode, Claude Code, and Codex subscriptions at a glance.
 
 The view must show:
 
 - spend for the current local calendar week;
 - spend for the current local calendar month;
 - total spend in the locally retained history;
+- measured token consumption for each period;
+- a separately labeled API-equivalent estimate for that consumption;
 - a combined total when at least one provider has dollar data;
 - tokens delivered per dollar when the source exposes trustworthy cumulative token counts.
 
-The feature uses provider-reported cost fields only. It does not fetch prices, infer subscription prices, or fabricate a Codex dollar amount when Codex reports usage as included with a plan.
+Provider-reported spend remains the actual-spend source of truth. The API-equivalent value is hypothetical: it uses a cached public pricing catalog and never replaces actual spend, infers a subscription fee, or fabricates a Codex provider charge when Codex reports usage as included with a plan.
 
 ## 2. Product behavior
 
@@ -24,14 +26,14 @@ The feature uses provider-reported cost fields only. It does not fetch prices, i
 
 The popover adds a compact **Spend & effectiveness** section with one row for each configured provider and a **Combined** row. The columns are **This week**, **This month**, and **Total retained**.
 
-Each dollar-backed cell displays a localized USD amount. A secondary line displays tokens per dollar when cumulative token data is available for that same period. Provider labels carry provenance:
+Each period cell displays three lines: the provider-reported actual spend, a separate `API eq. ~$x` hypothetical metered cost, and the measured token count. A compact status under the section title identifies live, cached, or unavailable public pricing and its rates-as-of date. Accessibility labels include the actual amount, API-equivalent amount, token count, coverage, and rates-as-of. Provider labels carry actual-spend provenance:
 
 - OpenCode: **Exact** when sourced from its local aggregate database;
 - Claude Code: **Estimated** when sourced from its status-line cost total;
 - Combined: **Includes estimate** when exact and estimated amounts are mixed;
 - Codex: **Included with plan** rather than `$0`.
 
-If a provider has no usable cost data, the cell displays an em dash and a short reason such as **Unavailable** or **Included with plan**. The UI never treats missing cost as zero.
+If a provider has no usable actual cost data, the first line displays an em dash and a short reason such as **Unavailable** or **Included with plan**. If the model rate is unknown or unavailable, the API-equivalent line says **API equivalent unavailable**; it never displays `$0.00` as a substitute for missing rates.
 
 The combined row sums only dollar-backed providers. Its tokens-per-dollar value is shown only when all included token totals are trustworthy; otherwise it shows an em dash with an explanation in the accessibility label.
 
@@ -43,7 +45,7 @@ All amounts are clamped to finite, non-negative values before aggregation. A cou
 
 ### 2.3 Codex limitation
 
-Codex currently exposes subscription usage and no five-hour dollar-priced API budget. The spend section therefore shows its token/quota information where available and **Included with plan** for dollar spend. The app does not estimate a price from public API rates or compare a subscription fee it has not been given.
+Codex currently exposes subscription usage and no five-hour dollar-priced API budget. The spend section therefore keeps **Included with plan** for actual dollar spend while showing measured tokens and, when the configured local Codex model resolves to a public rate, a clearly labeled detected-model API-equivalent estimate. This estimate is not a Codex bill and never changes the actual-spend value.
 
 ## 3. Data model and flow
 
@@ -57,6 +59,8 @@ Add provider-neutral types in `SessionLensCore`:
 - `SpendSummary`: provider summaries plus the combined summary.
 
 The aggregation API is pure and accepts normalized daily cost buckets plus cumulative provider samples. This keeps calendar math, provenance merging, reset handling, and formatting out of SwiftUI.
+
+The API-equivalent summary is computed separately from actual spend. It consumes normalized token totals and model metadata, resolves rates from the fixed public Models.dev catalog, and marks latest-model, detected-model, stale-catalog, and unavailable fallbacks explicitly.
 
 ### 3.2 Exact daily aggregates
 
@@ -86,9 +90,9 @@ On launch, `AppModel` loads the persisted spend inputs and computes the initial 
 
 Create `SpendSummaryView` in the existing popover scroll content, near the quota and token summaries so the values are visible without navigating to Settings. The view uses the existing palette, spacing, typography, and compact card/grid conventions.
 
-The section is read-only. It does not introduce provider selectors, pricing settings, network controls, or subscription billing inputs. Existing provider tabs remain available for detailed token and quota inspection.
+The section is read-only. It does not introduce provider selectors, pricing settings, network controls, or subscription billing inputs. A background request to the fixed public pricing catalog is automatic and contains no usage or credential data. Existing provider tabs remain available for detailed token and quota inspection.
 
-Accessibility labels include the provider, period, amount, provenance, and whether tokens-per-dollar is unavailable because the provider does not expose cumulative token totals.
+Accessibility labels include the provider, period, actual amount and provenance, API-equivalent amount and coverage, measured token count, rates-as-of date, and whether tokens-per-dollar is unavailable because the provider does not expose cumulative token totals.
 
 Preview fixtures include exact OpenCode, estimated Claude, and included-plan Codex states so light/dark previews exercise every provenance branch.
 
@@ -100,7 +104,7 @@ Preview fixtures include exact OpenCode, estimated Claude, and included-plan Cod
 - Counter resets and corrections cannot produce negative period totals.
 - Infinite, NaN, or negative provider costs/tokens are rejected or clamped before persistence.
 - A mixed combined total is clearly marked as including an estimate.
-- No external network request is added.
+- The only new network request is the fixed HTTPS public pricing-catalog request. Usage records, prompts, credentials, account identity, and project paths remain local and are never included in it.
 
 ## 6. Verification
 
@@ -112,6 +116,7 @@ Add focused tests for:
 4. tokens-per-dollar availability and division-by-zero behavior;
 5. Core Data round trips, pruning, clearing, and privacy allowlists;
 6. AppModel launch/refresh summary loading;
-7. SwiftUI accessibility labels and preview fixture rendering where the existing test harness supports it.
+7. API-equivalent rates, provenance, pricing status, rates-as-of formatting, SwiftUI accessibility labels, and preview fixture rendering where the existing test harness supports it;
+8. fixed-endpoint pricing privacy and cached/offline behavior.
 
 Run the full existing test suite and the bundle verifier before claiming completion. No release or GitHub push is part of this feature unless separately requested.
