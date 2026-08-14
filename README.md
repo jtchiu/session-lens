@@ -55,6 +55,10 @@ Install and authenticate Codex locally so `codex` is discoverable on `PATH` or i
 
 Codex quota windows are detection-only: SessionLens shows a 5-hour window only when the current app-server response exposes one. The menu-bar summary prefers that 5-hour window and falls back to the returned weekly window while Codex's 5-hour limit is unavailable.
 
+## Spend comparison
+
+The popover includes a local **Spend & effectiveness** comparison for OpenCode, Claude Code, Codex, and the combined total. It shows this week, this month, and the retained-history total, plus tokens per dollar when cumulative token data is trustworthy. OpenCode uses exact aggregate pricing, Claude uses clearly labeled estimated API-token pricing, and Codex is shown as **Included with plan** without inventing a dollar amount. Spend samples are stored locally and follow the configured history retention.
+
 ## Notifications
 
 Notifications are disabled by default. Enable them in Settings to request macOS permission, then choose percentage thresholds and whether quota resets should notify. Unavailable, stale, estimated, and local-budget values do not produce provider-quota alerts, and durable event keys prevent duplicate crossings.

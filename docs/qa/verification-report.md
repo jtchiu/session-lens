@@ -1,14 +1,14 @@
 # SessionLens verification report
 
 Date: 2026-08-13
-Build: `codex/sessionlens-app`  
+Build: `codex/provider-spend`
 Distribution: free local personal-use macOS 14+ app; ad-hoc signed only for local launch
 
 All automated fixtures are synthetic. No prompt, source-code, credential, project-path, or transcript data was copied into a fixture or report.
 
 | Acceptance criterion | Evidence | Result | Notes |
 | --- | --- | --- | --- |
-| 1. `swift test` passes | `scripts/test.sh` completed with 110 tests in 15 suites. | Proven | Includes provider, persistence, notifications, lifecycle, UI summary, remaining-capacity presentation, Codex 5-hour detection/fallback, and privacy suites. |
+| 1. `swift test` passes | `scripts/test.sh` completed with 121 tests in 18 suites. | Proven | Includes provider, persistence, notifications, lifecycle, UI summary, spend aggregation/formatting, remaining-capacity presentation, Codex 5-hour detection/fallback, and privacy suites. |
 | 2. Release build and `.app` packaging succeed | `zsh scripts/package_app.sh`; `zsh scripts/verify_bundle.sh dist/SessionLens.app`; `codesign --verify --deep --strict`. | Proven | Bundle contains the app executable, Claude helper, Info.plist, and generated `.icns`. |
 | 3. Bundle launches as a menu-bar app without a normal Dock icon | `open -n dist/SessionLens.app` launched the process; unified logs show Control Center registered `com.justinchiu.SessionLens-Item-0` as a `.menuBar` displayable. `LSUIElement=true` is verified in the bundle. | Proven | The process remains accessory/background and no Dock window is created. |
 | 4. Popover exposes OpenCode, Claude, and Codex states | `docs/qa/sessionlens-popover-light.png`, `sessionlens-popover-dark.png`; native accessibility QA switched OpenCode → Claude setup-required → Codex ready. | Proven | Missing Claude is a non-fatal setup state. |
@@ -21,6 +21,7 @@ All automated fixtures are synthetic. No prompt, source-code, credential, projec
 | 11. Privacy tests prove forbidden access is absent | `PrivacyBoundaryTests` passed exact OpenCode SQL identifiers, Codex method allowlist, Core Data persisted-property allowlist, and Claude cache keys. | Proven | No prompt/source/project/path/message fields are persisted. |
 | 12. No licensing, payment, analytics, cloud sync, or app-owned backend code | `rg -n 'URLSession|import Network|NWConnection|CFHTTP' Sources` returned no matches; README and Info.plist describe free local use; dependencies are system frameworks only. | Proven | Provider-owned CLIs may perform their own authenticated refreshes; SessionLens has no network client. |
 | 13. Visual QA is clean and original | Accepted concepts and latest light/dark renders were inspected with `view_image`; fidelity ledger records comparison points and fixes. Native accessibility QA exercised tabs, ranges, refresh, Settings, mappings, confirmations, and Quit. | Proven | The icon is the original aperture-and-bars source; no SessionWatcher asset or wordmark is used. |
+| 14. Provider spend is comparable without fabricated costs | `SpendAggregatorTests`, `SpendSummaryLoaderTests`, `SpendFormattingTests`, Claude cumulative-token fixtures, and snapshot round-trip/prune/clear tests passed. `SpendSummaryView` renders weekly, monthly, retained-history, provider, combined, provenance, and tokens-per-dollar values. | Proven | OpenCode is exact, Claude is explicitly estimated, Codex is included-with-plan, and combined dollars exclude Codex rather than displaying a fabricated zero. |
 
 ## Runtime notes
 
@@ -30,3 +31,4 @@ All automated fixtures are synthetic. No prompt, source-code, credential, projec
 - The packaged app is ad-hoc signed for this personal build. It is intentionally not notarized or presented as a distributable commercial application.
 - `AppModel.live()` hydrates the last normalized snapshots/history before the first launch refresh; `SessionLensApp` starts that refresh during app initialization, so the menu-bar summary is not gated on opening the popover.
 - Retention cleanup runs after refresh/settings changes using the configured history retention and removes old notification crossing keys; fine-grained quota observations remain capped at 90 days.
+- Provider spend samples are persisted locally, deduplicated, and pruned with the configured retention. Cumulative Claude samples establish a baseline before charging positive deltas, so refreshes and counter resets do not inflate spend.
