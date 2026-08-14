@@ -165,7 +165,7 @@ struct SpendSummaryView: View {
         .lineLimit(1)
         .minimumScaleFactor(0.55)
         .monospacedDigit()
-      Text(tokenLineText(value: value, apiEquivalent: apiEquivalent))
+      Text(tokenLineText(value: value))
         .foregroundStyle(.secondary)
         .lineLimit(1)
         .minimumScaleFactor(0.5)
@@ -184,10 +184,9 @@ struct SpendSummaryView: View {
   }
 
   private func tokenLineText(
-    value: SpendValue,
-    apiEquivalent: ApiEquivalentValue
+    value: SpendValue
   ) -> String {
-    let tokenText = SpendFormatting.tokenText(apiEquivalent.tokens ?? value.tokens)
+    let tokenText = SpendFormatting.tokenText(value.tokens)
     let efficiency = SpendFormatting.efficiencyText(value)
     guard efficiency != "—" else { return tokenText }
     return "\(tokenText) · \(efficiency)"

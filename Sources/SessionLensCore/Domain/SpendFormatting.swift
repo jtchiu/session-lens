@@ -87,7 +87,9 @@ public enum SpendFormatting {
         actual: SpendValue,
         apiEquivalent: ApiEquivalentValue
     ) -> String {
-        let tokens = apiEquivalent.tokens ?? actual.tokens
+        // Token consumption comes from the actual combined ledger. The API
+        // equivalent may intentionally omit providers whose rates are unknown.
+        let tokens = actual.tokens
         var label = "\(provider), \(period)."
         label += " Actual spend: \(costText(actual)), \(provenanceText(actual))."
         label += " API equivalent: \(apiEquivalentText(apiEquivalent)),"

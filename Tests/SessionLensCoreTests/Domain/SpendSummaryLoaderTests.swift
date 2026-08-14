@@ -161,6 +161,94 @@ struct SpendSummaryLoaderTests {
     }
 
     @Test
+    func combinedAccessibilityUsesAllActualTokensWhenOneApiRateIsUnavailable() {
+        let now = Self.date(2025, 1, 15)
+        let openCodeSnapshot = ProviderSnapshot(
+            provider: .opencode,
+            observedAt: now,
+            health: .ready,
+            tokens: nil,
+            costDisplay: .exactUSD(9),
+            dailyBuckets: [],
+            quotaWindows: [],
+            modelBreakdowns: [
+                ModelUsage(
+                    providerID: "openai",
+                    modelID: "known-model",
+                    tokens: TokenBreakdown(
+                        input: 500_000,
+                        output: 0,
+                        reasoning: 0,
+                        cacheRead: 0,
+                        cacheWrite: 0
+                    ),
+                    costUSD: 9
+                )
+            ]
+        )
+        let claudeSnapshot = ProviderSnapshot(
+            provider: .claude,
+            observedAt: now,
+            health: .ready,
+            tokens: nil,
+            costDisplay: .estimatedUSD(3),
+            dailyBuckets: [],
+            quotaWindows: [],
+            modelBreakdowns: []
+        )
+        let catalog = PricingCatalog(
+            models: [
+                PricingCatalogModel(
+                    providerID: "openai",
+                    modelID: "known-model",
+                    rate: PricingRate(inputPerMillion: 2)
+                )
+            ],
+            updatedAt: now,
+            fetchedAt: now
+        )
+        let summary = SpendSummaryLoader.makeSummary(
+            now: now,
+            historyRetentionDays: 30,
+            snapshots: [
+                .opencode: openCodeSnapshot,
+                .claude: claudeSnapshot,
+            ],
+            dailyBuckets: [
+                .opencode: [
+                    UsageBucket(
+                        day: Self.date(2025, 1, 14),
+                        tokens: 500_000,
+                        costUSD: 9
+                    ),
+                ],
+                .claude: [
+                    UsageBucket(
+                        day: Self.date(2025, 1, 14),
+                        tokens: 1_000_000,
+                        costUSD: 3
+                    ),
+                ],
+            ],
+            samples: [],
+            catalogState: PricingCatalogState(source: .live, catalog: catalog),
+            calendar: Self.calendar
+        )
+
+        #expect(summary.combined.week.tokens == 1_500_000)
+        #expect(summary.apiEquivalent.providers[.opencode]?.week.tokens == 500_000)
+        #expect(summary.apiEquivalent.providers[.claude]?.week.costUSD == nil)
+
+        let combinedLabel = SpendFormatting.comparisonAccessibilityLabel(
+            provider: "Combined",
+            period: "This week",
+            actual: summary.combined.week,
+            apiEquivalent: summary.apiEquivalent.combined.week
+        )
+        #expect(combinedLabel.contains("1,500,000 tokens"))
+    }
+
+    @Test
     func decodesLegacySummaryWithoutApiEquivalentData() throws {
         let encoded = try JSONEncoder().encode(
             SpendSummary.empty(retentionDays: 30)
