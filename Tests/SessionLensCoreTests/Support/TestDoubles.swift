@@ -22,6 +22,27 @@ final class FakeExecutableFileSystem: ExecutableFileSystem, @unchecked Sendable 
     }
 }
 
+final class FakePricingFileSystem: PricingFileSystem, @unchecked Sendable {
+    private let contents: [URL: String]
+    private let lock = NSLock()
+    private var requestedURLs: [URL] = []
+
+    init(contents: [URL: String] = [:]) {
+        self.contents = contents
+    }
+
+    func readIfExists(_ url: URL) -> String? {
+        lock.withLock {
+            requestedURLs.append(url)
+            return contents[url]
+        }
+    }
+
+    var readURLs: [URL] {
+        lock.withLock { requestedURLs }
+    }
+}
+
 actor FakeProcessRunner: ProcessExecuting {
     private var results: [ProcessResult]
     private var recordedRequests: [ProcessRequest] = []
