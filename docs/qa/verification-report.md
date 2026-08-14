@@ -1,14 +1,14 @@
 # SessionLens verification report
 
 Date: 2026-08-14
-Build: `codex/api-equivalent-spend@e568344`
+Build: `codex/api-equivalent-spend@b71c8e6`
 Distribution: free local personal-use macOS 14+ app; ad-hoc signed only for local launch
 
 All automated fixtures are synthetic. No prompt, source-code, credential, project-path, or transcript data was copied into a fixture or report.
 
 | Acceptance criterion | Evidence | Result | Notes |
 | --- | --- | --- | --- |
-| 1. `swift test` passes | Serialized `zsh scripts/test.sh --no-parallel` completed with 167 tests in 21 suites. | Proven (serialized) | The default-concurrency run reproduced two timing-sensitive `UsageCoordinatorTests` flakes; the implementation is unchanged and the deterministic serialized run is green. |
+| 1. `swift test` passes | Serialized `zsh scripts/test.sh --no-parallel` completed with 173 tests in 22 suites. | Proven (serialized) | Includes the final Codex config-boundary, cache-permission, overflow, pricing, provider, persistence, lifecycle, UI summary, notification, and privacy coverage. |
 | 2. Release build and `.app` packaging succeed | `zsh scripts/package_app.sh`; `zsh scripts/verify_bundle.sh dist/SessionLens.app`; the verifier's metadata-free copy passed `codesign --verify --deep --strict`. | Proven | Bundle contains the app executable, Claude helper, Info.plist, and generated `.icns`; the verifier deliberately strips Finder/FileProvider metadata before signature validation. |
 | 3. Bundle launches as a menu-bar app without a normal Dock icon | `open -n dist/SessionLens.app` launched the process; unified logs show Control Center registered `com.justinchiu.SessionLens-Item-0` as a `.menuBar` displayable. `LSUIElement=true` is verified in the bundle. | Proven | The process remains accessory/background and no Dock window is created. |
 | 4. Popover exposes OpenCode, Claude, and Codex states | `docs/qa/sessionlens-popover-light.png`, `sessionlens-popover-dark.png`; native accessibility QA switched OpenCode → Claude setup-required → Codex ready. | Proven | Missing Claude is a non-fatal setup state. |
@@ -34,10 +34,10 @@ All automated fixtures are synthetic. No prompt, source-code, credential, projec
 - Retention cleanup runs after refresh/settings changes using the configured history retention and removes old notification crossing keys; fine-grained quota observations remain capped at 90 days.
 - Provider spend samples are persisted locally, deduplicated, and pruned with the configured retention. Cumulative Claude samples establish a baseline before charging positive deltas, so refreshes and counter resets do not inflate spend.
 
-## Task 7 final verification (2026-08-14)
+## Task 7 final verification (2026-08-14, final tip `b71c8e6`)
 
-- `zsh scripts/test.sh` completed compilation but reproduced two known, timing-sensitive `UsageCoordinatorTests` failures under default concurrency (225 ms measured against 180 ms, and an overlapping-refresh assertion). No implementation files were changed for this environmental flake.
-- `zsh scripts/test.sh --no-parallel` passed: 167 tests in 21 suites, 0 failures. The focused `zsh scripts/test.sh --filter PrivacyBoundaryTests` passed: 4 tests in 1 suite, 0 failures.
+- `zsh scripts/test.sh --no-parallel` passed: 173 tests in 22 suites, 0 failures. The final run includes the bounded Codex config scanner cases and restrictive pricing-cache permission coverage.
+- `zsh scripts/test.sh --filter PrivacyBoundaryTests` passed: 4 tests in 1 suite, 0 failures.
 - `git diff --check` passed with no output. `rg -n 'https?://' Sources/SessionLensCore Sources/SessionLens` returned exactly `Sources/SessionLensCore/Pricing/PricingCatalogClient.swift:22: https://models.dev/api.json`.
 - `zsh scripts/package_app.sh` passed, building the release `SessionLens` executable and `SessionLensClaudeBridge` helper, generating the icon, ad-hoc signing the bundle, and invoking the verifier. A direct `zsh scripts/verify_bundle.sh dist/SessionLens.app` also passed. The verifier's metadata-free copy passed deep strict code-signature verification and contains the executable, helper, `Info.plist`, and `SessionLens.icns`.
-- Local packaged smoke: `open -n dist/SessionLens.app` launched `/Users/justinchiu/Documents/ChatGPT/Session Watcher/.worktrees/api-equivalent-spend/dist/SessionLens.app/Contents/MacOS/SessionLens` (PID 80635 remained alive); unified logs show the `NSStatusItemView` menu-bar scene and a successful 200 response for the public catalog request. The Computer Use accessibility bridge timed out for this accessory-only menu-bar app in this runner, so opening the popover and visually clicking each provider row could not be automated here. The Core pricing/summary seam above is the strongest deterministic cache-unavailable/live-refresh check; no claim is made that a packaged UI click-through was completed.
+- Fresh packaged smoke: `open -n dist/SessionLens.app` launched `/Users/justinchiu/Documents/ChatGPT/Session Watcher/.worktrees/api-equivalent-spend/dist/SessionLens.app/Contents/MacOS/SessionLens` (fresh PID 94837 was observed alive after two seconds, then stopped after the check). The Computer Use accessibility bridge timed out for this accessory-only menu-bar app in this runner, so opening the popover and visually clicking each provider row could not be automated here. The focused pricing/summary tests above remain the deterministic cache-unavailable/live-refresh check; no claim is made that a packaged UI click-through was completed.
