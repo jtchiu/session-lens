@@ -378,7 +378,7 @@ private struct ProviderSettingsView: View {
           .foregroundStyle(.secondary)
         VStack(alignment: .leading, spacing: SessionLensSpacing.xSmall) {
           Text(
-            "Aggregate usage metadata stays on this Mac. Public model pricing metadata may be fetched for API-equivalent estimates; prompts, source code, credentials, and project paths are never read."
+            "Aggregate usage metadata stays on this Mac. Public model pricing metadata may be fetched for API-equivalent estimates. Claude bridge settings and only the allowlisted top-level Codex model setting are read locally; prompts, source code, credentials, and project-path metadata are never read or sent."
           )
           .foregroundStyle(.primary)
           Text("Learn More")
@@ -842,7 +842,7 @@ private struct PrivacySettingsView: View {
         PrivacyAllowlistRow(
           provider: "Codex",
           detail:
-            "Only initialize, account/usage/read, and account/rateLimits/read on the local app-server."
+            "Only initialize, account/usage/read, and account/rateLimits/read on the local app-server, plus the top-level model setting from ~/.codex/config.toml; nested/project configuration is ignored."
         )
       }
 
@@ -852,7 +852,7 @@ private struct PrivacySettingsView: View {
           systemImage: "network"
         )
         Label(
-          "Prompts, source code, credentials, and project paths are never sent or stored.",
+          "Prompts, source code, credentials, and project-path metadata are never sent or stored.",
           systemImage: "lock.shield")
         Label(
           "No analytics, licensing, cloud sync, or app-owned backend.",

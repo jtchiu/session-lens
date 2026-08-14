@@ -23,18 +23,18 @@ final class FakeExecutableFileSystem: ExecutableFileSystem, @unchecked Sendable 
 }
 
 final class FakePricingFileSystem: PricingFileSystem, @unchecked Sendable {
-    private let contents: [URL: String]
+    private let models: [URL: String]
     private let lock = NSLock()
     private var requestedURLs: [URL] = []
 
-    init(contents: [URL: String] = [:]) {
-        self.contents = contents
+    init(models: [URL: String] = [:]) {
+        self.models = models
     }
 
-    func readIfExists(_ url: URL) -> String? {
+    func readTopLevelModelIfExists(_ url: URL) -> String? {
         lock.withLock {
             requestedURLs.append(url)
-            return contents[url]
+            return models[url]
         }
     }
 

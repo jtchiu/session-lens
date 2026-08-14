@@ -76,6 +76,36 @@ struct PricingCatalogClientTests {
     }
 
     @Test
+    func cacheDirectoryAndFileUseRestrictivePermissions() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sessionlens-pricing-\(UUID().uuidString)", isDirectory: true)
+        let cacheURL = directory.appendingPathComponent("pricing-catalog.json")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let client = PricingCatalogClient(
+            cacheURL: cacheURL,
+            transport: FakePricingTransport(
+                response: .response(.init(
+                    statusCode: 200,
+                    data: PricingFixtures.catalogJSON,
+                    etag: nil,
+                    lastModified: nil
+                ))
+            )
+        )
+
+        _ = await client.refreshIfNeeded(now: PricingFixtures.day(1))
+
+        let directoryMode = try #require(
+            (try FileManager.default.attributesOfItem(atPath: directory.path)[.posixPermissions] as? NSNumber)
+        )
+        let fileMode = try #require(
+            (try FileManager.default.attributesOfItem(atPath: cacheURL.path)[.posixPermissions] as? NSNumber)
+        )
+        #expect(directoryMode.intValue & 0o777 == 0o700)
+        #expect(fileMode.intValue & 0o777 == 0o600)
+    }
+
+    @Test
     func staleCacheUsesConditionalFetchAndKeepsCatalogOnFailure() async throws {
         let transport = FakePricingTransport(
             response: .response(.init(statusCode: 503, data: Data(), etag: nil, lastModified: nil))
@@ -418,7 +448,10 @@ private actor FakePricingTransport: PricingCatalogTransport {
 
 private enum TestCacheFile {
     static func emptyURL() -> URL {
-        FileManager.default.temporaryDirectory.appendingPathComponent("pricing-catalog-\(UUID().uuidString).json")
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sessionlens-pricing-cache-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory.appendingPathComponent("pricing-catalog.json")
     }
 
     static func write(_ data: Data) throws -> URL {
@@ -428,6 +461,6 @@ private enum TestCacheFile {
     }
 
     static func remove(_ url: URL) {
-        try? FileManager.default.removeItem(at: url)
+        try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
     }
 }

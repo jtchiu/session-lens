@@ -8,12 +8,12 @@ The project is available under the [MIT License](LICENSE).
 
 - OpenCode: `~/.local/share/opencode/opencode.db`, through one fixed `sqlite3 -readonly -json` aggregate query over the `session` table.
 - Claude Code: only after you explicitly install the bridge, the official status-line JSON delivered to the bridge on standard input. The bridge keeps normalized quota, context-token, model, session-hash, and estimated-cost metadata in the local SessionLens bridge directory.
-- Codex: the local `codex app-server --listen stdio://` JSONL process, limited to `initialize`, `initialized`, `account/rateLimits/read`, and `account/usage/read`.
+- Codex: the local `codex app-server --listen stdio://` JSONL process, limited to `initialize`, `initialized`, `account/rateLimits/read`, and `account/usage/read`, plus the allowlisted top-level `model` setting in `~/.codex/config.toml` for API-equivalent pricing. The config reader stops before nested sections and returns only that model value.
 - SessionLens: its own normalized aggregate history, notification deduplication records, and settings in Application Support.
 
 ## What SessionLens never reads
 
-SessionLens never reads prompts, source code, transcript/message content, diffs, project files, credentials, API keys, or provider databases outside the documented aggregate fields. Its only network request is a fixed HTTPS public model-pricing catalog used to calculate API-equivalent estimates; that request contains no usage data, prompts, credentials, account identity, or project paths. SessionLens does not ship usage data to a service or use a remote analytics SDK. The only provider configuration file it touches is `~/.claude/settings.json`, and only for the explicitly confirmed bridge install/uninstall flow.
+SessionLens never reads prompts, source code, transcript/message content, diffs, project files, credentials, API keys, project-path metadata, or provider databases outside the documented aggregate fields. Its only network request is a fixed HTTPS public model-pricing catalog used to calculate API-equivalent estimates; that request contains no usage data, prompts, credentials, account identity, or project paths. SessionLens does not ship usage data to a service or use a remote analytics SDK. Claude's `~/.claude/settings.json` is touched only for the explicitly confirmed bridge install/uninstall flow; Codex's `~/.codex/config.toml` is read through a bounded parser that extracts only its top-level `model` setting and no nested/project configuration.
 
 ## Requirements
 

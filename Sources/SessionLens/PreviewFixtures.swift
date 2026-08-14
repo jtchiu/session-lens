@@ -166,7 +166,21 @@ enum PreviewFixtures {
             costDisplay: .estimatedUSD(3.10),
             dailyBuckets: [],
             quotaWindows: [],
-            modelBreakdowns: [],
+            modelBreakdowns: [
+                ModelUsage(
+                    providerID: "anthropic",
+                    modelID: "claude-sonnet",
+                    tokens: TokenBreakdown(
+                        input: 120_000,
+                        output: 80_000,
+                        reasoning: 0,
+                        cacheRead: 40_000,
+                        cacheWrite: 10_000
+                    ),
+                    costUSD: 3.10,
+                    lastObservedAt: now
+                )
+            ],
             costSample: claudeSpendSample
         ),
         .codex: ProviderSnapshot(

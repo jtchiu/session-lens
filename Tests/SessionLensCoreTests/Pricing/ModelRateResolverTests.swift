@@ -128,13 +128,33 @@ struct ModelRateResolverTests {
     }
 
     @Test
-    func liveReadsOnlyCodexConfigThroughInjectedFileSystem() {
+    func liveReadsOnlyTopLevelCodexModelMetadataThroughInjectedFileSystem() {
         let home = URL(fileURLWithPath: "/tmp/sessionlens-home", isDirectory: true)
         let config = home.appending(path: ".codex/config.toml")
-        let fileSystem = FakePricingFileSystem(contents: [config: "model = \"gpt-test\""])
+        let fileSystem = FakePricingFileSystem(models: [config: "gpt-test"])
 
         #expect(CodexModelDetector.live(homeDirectory: home, fileSystem: fileSystem) == "gpt-test")
         #expect(fileSystem.readURLs == [config])
+    }
+
+    @Test
+    func boundedCodexConfigReaderStopsBeforeNestedSections() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sessionlens-codex-" + UUID().uuidString, isDirectory: true)
+        let config = root.appendingPathComponent("config.toml")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try #"""
+        model = "gpt-test"
+
+[profiles.work]
+model = "should-not-be-read"
+project_path = "/Users/example/project"
+"""#.write(to: config, atomically: true, encoding: .utf8)
+
+        #expect(
+            FoundationPricingFileSystem().readTopLevelModelIfExists(config) == "gpt-test"
+        )
     }
 
     private let catalog = PricingCatalog(

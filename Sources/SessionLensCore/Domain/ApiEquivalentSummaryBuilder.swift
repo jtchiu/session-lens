@@ -46,7 +46,7 @@ public enum ApiEquivalentSummaryBuilder {
     }
 }
 
-private extension ApiEquivalentSummaryBuilder {
+extension ApiEquivalentSummaryBuilder {
     static func periods(
         provider: ProviderID,
         periods: SpendPeriods,
@@ -212,18 +212,40 @@ private extension ApiEquivalentSummaryBuilder {
             proportions.cacheWrite,
             proportions.uncategorized,
         ].map { max(0, $0) }
-        let sourceTotal = saturatingSum(source)
-        guard sourceTotal > 0 else { return nil }
+        let sourceTotal = source.reduce(0.0) { total, sourceTokens in
+            total + Double(sourceTokens)
+        }
+        guard sourceTotal.isFinite, sourceTotal > 0 else { return nil }
 
         let normalizedTotal = max(0, total)
-        let scaled = source.map { sourceTokens in
-            Int((Double(sourceTokens) / Double(sourceTotal) * Double(normalizedTotal)).rounded(.down))
+        let rawScaled = source.map { sourceTokens in
+            clampedRoundedDown(
+                Double(sourceTokens) / sourceTotal * Double(normalizedTotal)
+            )
         }
-        let assigned = saturatingSum(scaled)
+        var scaled = Array(repeating: 0, count: source.count)
+        var assigned = 0
+        let allocationOrder = source.indices.sorted { left, right in
+            if rawScaled[left] != rawScaled[right] {
+                return rawScaled[left] < rawScaled[right]
+            }
+            if source[left] != source[right] {
+                return source[left] < source[right]
+            }
+            return left < right
+        }
+        for index in allocationOrder {
+            let remaining = normalizedTotal - assigned
+            let component = min(rawScaled[index], remaining)
+            scaled[index] = component
+            assigned += component
+        }
         let remainder = max(0, normalizedTotal - assigned)
-        let largestSourceIndex = source.indices.max { source[$0] < source[$1] } ?? 0
+        let largestSourceIndex = source.indices.reduce(0) { current, index in
+            source[index] > source[current] ? index : current
+        }
         var result = scaled
-        result[largestSourceIndex] = min(Int.max, result[largestSourceIndex] + remainder)
+        result[largestSourceIndex] += remainder
         return TokenBreakdown(
             input: result[0],
             output: result[1],
@@ -232,6 +254,13 @@ private extension ApiEquivalentSummaryBuilder {
             cacheWrite: result[4],
             uncategorized: result[5]
         )
+    }
+
+    static func clampedRoundedDown(_ value: Double) -> Int {
+        guard value.isFinite, value > 0 else { return 0 }
+        let roundedDown = value.rounded(.down)
+        guard roundedDown < Double(Int.max) else { return Int.max }
+        return Int(roundedDown)
     }
 
     static func hasPricedCategorizedTokens(

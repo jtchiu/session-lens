@@ -124,7 +124,12 @@ public actor PricingCatalogClient {
 
     private func readCache() -> PricingCacheRecord? {
         guard let data = try? Data(contentsOf: cacheURL) else { return nil }
-        return try? PricingCacheRecord.decode(data)
+        guard let cache = try? PricingCacheRecord.decode(data) else { return nil }
+        try? restrictPermissions(
+            directory: cacheURL.deletingLastPathComponent(),
+            file: cacheURL
+        )
+        return cache
     }
 
     private func writeCache(_ cache: PricingCacheRecord) throws {
@@ -132,14 +137,36 @@ public actor PricingCatalogClient {
         let fileManager = FileManager.default
         let directory = cacheURL.deletingLastPathComponent()
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        try restrictDirectoryPermissions(directory)
         let temporaryURL = directory.appendingPathComponent(".\(cacheURL.lastPathComponent).\(UUID().uuidString).tmp")
         defer { try? fileManager.removeItem(at: temporaryURL) }
         try data.write(to: temporaryURL, options: .withoutOverwriting)
+        try restrictFilePermissions(temporaryURL)
         if fileManager.fileExists(atPath: cacheURL.path) {
             _ = try fileManager.replaceItemAt(cacheURL, withItemAt: temporaryURL)
         } else {
             try fileManager.moveItem(at: temporaryURL, to: cacheURL)
         }
+        try restrictFilePermissions(cacheURL)
+    }
+
+    private func restrictPermissions(directory: URL, file: URL) throws {
+        try restrictDirectoryPermissions(directory)
+        try restrictFilePermissions(file)
+    }
+
+    private func restrictDirectoryPermissions(_ directory: URL) throws {
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: Int(0o700))],
+            ofItemAtPath: directory.path
+        )
+    }
+
+    private func restrictFilePermissions(_ file: URL) throws {
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: Int(0o600))],
+            ofItemAtPath: file.path
+        )
     }
 }
 
