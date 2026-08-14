@@ -297,7 +297,8 @@ private extension ProviderSnapshot {
             dailyBuckets: dailyBuckets,
             quotaWindows: quotaWindows,
             modelBreakdowns: modelBreakdowns,
-            diagnostic: diagnostic
+            diagnostic: diagnostic,
+            costSample: costSample
         )
     }
 
@@ -320,7 +321,8 @@ private extension ProviderSnapshot {
                 )
             },
             modelBreakdowns: modelBreakdowns,
-            diagnostic: diagnostic
+            diagnostic: diagnostic,
+            costSample: costSample
         )
     }
 }

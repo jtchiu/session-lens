@@ -6,6 +6,7 @@ import SessionLensCore
 @MainActor
 final class AppModel: ObservableObject {
   @Published private(set) var snapshots: [ProviderID: ProviderSnapshot]
+  @Published private(set) var spendSummary: SpendSummary
   @Published private(set) var quotaHistory: [ProviderID: [QuotaHistoryPoint]]
   @Published var selectedProvider: ProviderID
   @Published private(set) var chartRange: UsageChartRange
@@ -32,6 +33,7 @@ final class AppModel: ObservableObject {
     notificationScheduler: any NotificationScheduling,
     settings: AppSettings,
     initialSnapshots: [ProviderID: ProviderSnapshot] = [:],
+    initialSpendSummary: SpendSummary = .empty(),
     initialQuotaHistory: [ProviderID: [QuotaHistoryPoint]] = [:],
     selectedProvider: ProviderID = .codex,
     automaticRefreshEnabled: Bool = true,
@@ -45,6 +47,7 @@ final class AppModel: ObservableObject {
     self.notificationScheduler = notificationScheduler
     self.settings = settings
     self.snapshots = initialSnapshots
+    self.spendSummary = initialSpendSummary
     self.quotaHistory = initialQuotaHistory
     self.selectedProvider = selectedProvider
     self.chartRange = settings.chartRange
@@ -91,6 +94,12 @@ final class AppModel: ObservableObject {
       repository: repository,
       snapshots: initialSnapshots
     )
+    let initialSpendSummary = loadSpendSummary(
+      repository: repository,
+      snapshots: initialSnapshots,
+      settings: settings,
+      now: Date()
+    )
     let providers = makeLiveProviders()
     let coordinator = UsageCoordinator(
       providers: providers,
@@ -104,6 +113,7 @@ final class AppModel: ObservableObject {
       notificationScheduler: NotificationScheduler(repository: repository),
       settings: settings,
       initialSnapshots: initialSnapshots,
+      initialSpendSummary: initialSpendSummary,
       initialQuotaHistory: initialHistory,
       claudeBridgeInstaller: ClaudeBridgeInstaller(
         helperSource: packagedClaudeBridgeHelperURL()
@@ -180,6 +190,12 @@ final class AppModel: ObservableObject {
       now: now,
       historyRetentionDays: settings.historyRetentionDays
     )
+    spendSummary = Self.loadSpendSummary(
+      repository: repository,
+      snapshots: snapshots,
+      settings: settings,
+      now: now
+    )
     guard settings.notificationsEnabled else { return }
 
     for provider in settings.providerOrder {
@@ -230,6 +246,12 @@ final class AppModel: ObservableObject {
     try? repository.prune(
       now: Date(),
       historyRetentionDays: updated.historyRetentionDays
+    )
+    spendSummary = Self.loadSpendSummary(
+      repository: repository,
+      snapshots: snapshots,
+      settings: updated,
+      now: Date()
     )
     if automaticRefreshEnabled {
       restartTimer()
@@ -392,6 +414,7 @@ final class AppModel: ObservableObject {
     do {
       try repository.clearHistory()
       snapshots = [:]
+      spendSummary = .empty(retentionDays: settings.historyRetentionDays)
       quotaHistory = [:]
       errorMessage = nil
     } catch {
@@ -482,6 +505,29 @@ final class AppModel: ObservableObject {
       )) ?? []
     }
     return history
+  }
+
+  private static func loadSpendSummary(
+    repository: SnapshotRepository,
+    snapshots: [ProviderID: ProviderSnapshot],
+    settings: AppSettings,
+    now: Date
+  ) -> SpendSummary {
+    var dailyBuckets: [ProviderID: [UsageBucket]] = [:]
+    for provider in ProviderID.allCases {
+      dailyBuckets[provider] = (try? repository.dailyUsage(
+        provider: provider,
+        range: Date.distantPast...Date.distantFuture
+      )) ?? []
+    }
+    let samples = (try? repository.spendSamples()) ?? []
+    return SpendSummaryLoader.makeSummary(
+      now: now,
+      historyRetentionDays: settings.historyRetentionDays,
+      snapshots: snapshots,
+      dailyBuckets: dailyBuckets,
+      samples: samples
+    )
   }
 
   private static func makeLiveProviders() -> [any UsageProvider] {
