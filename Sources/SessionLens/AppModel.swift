@@ -93,7 +93,7 @@ final class AppModel: ObservableObject {
     let initialHistory = loadQuotaHistory(
       repository: repository,
       snapshots: initialSnapshots,
-      chartRange: settings.chartRange
+      settings: settings
     )
     let initialSpendSummary = loadSpendSummary(
       repository: repository,
@@ -462,19 +462,19 @@ final class AppModel: ObservableObject {
 
   private func reloadQuotaHistory(now: Date) {
     let calendar = Calendar.current
-    let range = chartRange.dateRange(endingAt: now, calendar: calendar)
     var refreshed: [ProviderID: [QuotaHistoryPoint]] = [:]
-    for (provider, snapshot) in snapshots {
-      let window =
-        snapshot.quotaWindows.first(where: {
-          $0.durationMinutes == 10_080
-        }) ?? snapshot.quotaWindows.first
-      guard let duration = window?.durationMinutes else { continue }
-      refreshed[provider] =
+    let queries = QuotaHistoryQueryBuilder.rangeChange(
+      snapshots: snapshots,
+      chartRange: chartRange,
+      endingAt: now,
+      calendar: calendar
+    )
+    for query in queries {
+      refreshed[query.provider] =
         (try? repository.dailyQuotaHistory(
-          provider: provider,
-          durationMinutes: duration,
-          range: range,
+          provider: query.provider,
+          durationMinutes: query.durationMinutes,
+          range: query.range,
           calendar: calendar
         )) ?? []
     }
@@ -496,21 +496,22 @@ final class AppModel: ObservableObject {
   private static func loadQuotaHistory(
     repository: SnapshotRepository,
     snapshots: [ProviderID: ProviderSnapshot],
-    chartRange: UsageChartRange
+    settings: AppSettings
   ) -> [ProviderID: [QuotaHistoryPoint]] {
     let now = Date()
     let calendar = Calendar.current
-    let range = chartRange.dateRange(endingAt: now, calendar: calendar)
     var history: [ProviderID: [QuotaHistoryPoint]] = [:]
-    for (provider, snapshot) in snapshots {
-      let window = snapshot.quotaWindows.first(where: {
-        $0.durationMinutes == 10_080
-      }) ?? snapshot.quotaWindows.first
-      guard let duration = window?.durationMinutes else { continue }
-      history[provider] = (try? repository.dailyQuotaHistory(
-        provider: provider,
-        durationMinutes: duration,
-        range: range,
+    let queries = QuotaHistoryQueryBuilder.launchHydration(
+      snapshots: snapshots,
+      settings: settings,
+      endingAt: now,
+      calendar: calendar
+    )
+    for query in queries {
+      history[query.provider] = (try? repository.dailyQuotaHistory(
+        provider: query.provider,
+        durationMinutes: query.durationMinutes,
+        range: query.range,
         calendar: calendar
       )) ?? []
     }

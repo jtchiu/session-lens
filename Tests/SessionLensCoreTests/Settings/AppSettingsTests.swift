@@ -5,6 +5,88 @@ import Testing
 @Suite
 struct AppSettingsTests {
     @Test
+    func launchHydrationUsesPersistedCalendarRangeAndWeeklyWindow() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: -14_400)!
+        let reference = calendar.date(
+            from: DateComponents(year: 2026, month: 8, day: 13, hour: 15, minute: 30)
+        )!
+        let snapshot = Fixtures.aggregateSnapshot(
+            provider: .codex,
+            quotaWindows: [
+                QuotaWindow(
+                    id: "five-hour",
+                    label: "Five Hour",
+                    durationMinutes: 300,
+                    usedPercent: 22,
+                    resetsAt: reference,
+                    provenance: .exactProvider
+                ),
+                QuotaWindow(
+                    id: "weekly",
+                    label: "Weekly",
+                    durationMinutes: 10_080,
+                    usedPercent: 44,
+                    resetsAt: reference,
+                    provenance: .exactProvider
+                ),
+            ]
+        )
+
+        let queries = QuotaHistoryQueryBuilder.launchHydration(
+            snapshots: [.codex: snapshot],
+            settings: AppSettings(chartRange: .thirtyDays),
+            endingAt: reference,
+            calendar: calendar
+        )
+
+        #expect(queries.count == 1)
+        #expect(queries.first?.provider == .codex)
+        #expect(queries.first?.durationMinutes == 10_080)
+        #expect(queries.first?.range.lowerBound == calendar.date(
+            from: DateComponents(year: 2026, month: 7, day: 15)
+        ))
+        #expect(queries.first?.range.upperBound == reference)
+    }
+
+    @Test
+    func rangeChangeUsesUpdatedCalendarRangeAndFallbackWindow() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: -14_400)!
+        let reference = calendar.date(
+            from: DateComponents(year: 2026, month: 8, day: 13, hour: 15, minute: 30)
+        )!
+        let snapshot = Fixtures.aggregateSnapshot(
+            provider: .codex,
+            quotaWindows: [
+                QuotaWindow(
+                    id: "five-hour",
+                    label: "Five Hour",
+                    durationMinutes: 300,
+                    usedPercent: 22,
+                    resetsAt: reference,
+                    provenance: .exactProvider
+                )
+            ]
+        )
+
+        let queries = QuotaHistoryQueryBuilder.rangeChange(
+            snapshots: [.codex: snapshot],
+            chartRange: .ninetyDays,
+            endingAt: reference,
+            calendar: calendar
+        )
+
+        #expect(queries.count == 1)
+        #expect(queries.first?.provider == .codex)
+        #expect(queries.first?.durationMinutes == 300)
+        #expect(queries.first?.range.lowerBound == calendar.date(
+            from: DateComponents(year: 2026, month: 5, day: 16)
+        ))
+        #expect(queries.first?.range.upperBound == reference)
+    }
+
+    @Test
     func sevenDayDateRangeStartsAtTheLocalDaySixDaysBeforeTheReferenceTime() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: -14_400)!
