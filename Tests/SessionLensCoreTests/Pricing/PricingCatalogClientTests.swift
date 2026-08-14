@@ -17,6 +17,19 @@ struct PricingCatalogClientTests {
     }
 
     @Test
+    func decoderRetainsValidSiblingFieldsAndModelsWhenKnownFieldsAreMalformed() throws {
+        let catalog = try PricingCatalogDecoder.decode(
+            PricingFixtures.lossyCatalogJSON,
+            fetchedAt: PricingFixtures.day(1)
+        )
+
+        #expect(catalog.models.count == 2)
+        #expect(catalog.model(providerID: "lossy", modelID: "kept-input")?.rate == .init(inputPerMillion: 4))
+        #expect(catalog.model(providerID: "lossy", modelID: "kept-output")?.rate == .init(outputPerMillion: 7))
+        #expect(catalog.model(providerID: "lossy", modelID: "discarded") == nil)
+    }
+
+    @Test
     func freshCacheAvoidsTransport() async throws {
         let transport = FakePricingTransport(response: .failure(FakePricingTransport.Failure.requested))
         let cacheURL = try TestCacheFile.write(PricingFixtures.cacheData())
@@ -236,6 +249,31 @@ private enum PricingFixtures {
             }
           },
           "unrelated": ["ignored"]
+        }
+        """#.utf8
+    )
+
+    static let lossyCatalogJSON = Data(
+        #"""
+        {
+          "lossy": {
+            "id": "lossy",
+            "models": {
+              "kept-output": {
+                "id": "kept-output",
+                "cost": {"input": "bad", "output": 7, "cache_read": "also-bad"}
+              },
+              "kept-input": {
+                "id": "kept-input",
+                "cost": {"input": 4, "output": []}
+              },
+              "discarded": {
+                "id": "discarded",
+                "cost": {"input": "bad", "output": -2}
+              },
+              "malformed-model": "not-an-object"
+            }
+          }
         }
         """#.utf8
     )

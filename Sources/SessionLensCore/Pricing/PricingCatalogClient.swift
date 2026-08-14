@@ -253,11 +253,39 @@ private struct ModelsDevDocument: Decodable {
 private struct ModelsDevProvider: Decodable {
     let id: String?
     let models: [String: ModelsDevModel]?
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: DynamicCodingKey.self)
+        id = try? container.decode(String.self, forKey: DynamicCodingKey(stringValue: "id"))
+        guard container.contains(DynamicCodingKey(stringValue: "models")),
+              let modelsContainer = try? container.nestedContainer(
+                keyedBy: DynamicCodingKey.self,
+                forKey: DynamicCodingKey(stringValue: "models")
+              )
+        else {
+            models = nil
+            return
+        }
+        models = Dictionary(
+            uniqueKeysWithValues: modelsContainer.allKeys.compactMap { key in
+                guard let model = try? modelsContainer.decode(ModelsDevModel.self, forKey: key) else {
+                    return nil
+                }
+                return (key.stringValue, model)
+            }
+        )
+    }
 }
 
 private struct ModelsDevModel: Decodable {
     let id: String?
     let cost: ModelsDevCost?
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: DynamicCodingKey.self)
+        id = try? container.decode(String.self, forKey: DynamicCodingKey(stringValue: "id"))
+        cost = try? container.decode(ModelsDevCost.self, forKey: DynamicCodingKey(stringValue: "cost"))
+    }
 }
 
 private struct ModelsDevCost: Decodable {
@@ -273,6 +301,15 @@ private struct ModelsDevCost: Decodable {
         case reasoning
         case cacheRead = "cache_read"
         case cacheWrite = "cache_write"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        input = try? container.decode(Double.self, forKey: .input)
+        output = try? container.decode(Double.self, forKey: .output)
+        reasoning = try? container.decode(Double.self, forKey: .reasoning)
+        cacheRead = try? container.decode(Double.self, forKey: .cacheRead)
+        cacheWrite = try? container.decode(Double.self, forKey: .cacheWrite)
     }
 }
 
