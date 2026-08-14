@@ -157,6 +157,44 @@ project_path = "/Users/example/project"
         )
     }
 
+    @Test
+    func boundedCodexScannerDoesNotReadPastTheModelLine() {
+        let config = Data(
+            #"""
+model = "gpt-test"
+[profiles.work]
+project_path = "/Users/example/project"
+"""#.utf8
+        )
+        var remaining = config
+        var requestedByteCounts: [Int] = []
+
+        let model = CodexModelDetector.readTopLevelModel { requestedCount in
+            requestedByteCounts.append(requestedCount)
+            guard !remaining.isEmpty else { return Data() }
+            return Data([remaining.removeFirst()])
+        }
+
+        let modelLineLength = config.prefix(while: { $0 != 0x0A }).count + 1
+        #expect(model == "gpt-test")
+        #expect(requestedByteCounts == Array(repeating: 1, count: modelLineLength))
+        #expect(remaining.count == config.count - modelLineLength)
+    }
+
+    @Test
+    func oversizedNestedSectionFailsClosedBeforeReadingItsModel() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sessionlens-codex-oversized-" + UUID().uuidString, isDirectory: true)
+        let config = root.appendingPathComponent("config.toml")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let contents = "[profiles." + String(repeating: "x", count: 4_096) + "]\n"
+            + "model = \"nested-model\"\n"
+        try contents.write(to: config, atomically: true, encoding: .utf8)
+
+        #expect(FoundationPricingFileSystem().readTopLevelModelIfExists(config) == nil)
+    }
+
     private let catalog = PricingCatalog(
         models: [
             .init(providerID: "openai", modelID: "gpt-test", rate: .init(inputPerMillion: 1)),

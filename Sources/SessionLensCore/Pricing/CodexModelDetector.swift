@@ -13,55 +13,9 @@ public struct FoundationPricingFileSystem: PricingFileSystem {
     public func readTopLevelModelIfExists(_ url: URL) -> String? {
         guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
         defer { try? handle.close() }
-
-        let chunkSize = 4 * 1024
-        let maximumScanBytes = 64 * 1024
-        var scannedBytes = 0
-        var line = Data()
-        var skippingOversizedLine = false
-
-        func consume(_ line: Data) -> String? {
-            guard let text = String(data: line, encoding: .utf8) else { return nil }
-            return CodexModelDetector.modelFromTopLevelLine(text)
+        return CodexModelDetector.readTopLevelModel { requestedBytes in
+            try handle.read(upToCount: requestedBytes)
         }
-
-        while scannedBytes < maximumScanBytes {
-            let requestedBytes = min(chunkSize, maximumScanBytes - scannedBytes)
-            let chunk: Data?
-            do {
-                chunk = try handle.read(upToCount: requestedBytes)
-            } catch {
-                return nil
-            }
-            guard let chunk, !chunk.isEmpty else { break }
-            scannedBytes += chunk.count
-
-            for byte in chunk {
-                if byte == 0x0A {
-                    if !skippingOversizedLine, let modelID = consume(line) {
-                        return modelID
-                    }
-                    if !skippingOversizedLine,
-                       CodexModelDetector.isTopLevelSection(line)
-                    {
-                        return nil
-                    }
-                    line.removeAll(keepingCapacity: true)
-                    skippingOversizedLine = false
-                } else if !skippingOversizedLine {
-                    if line.count < chunkSize {
-                        line.append(byte)
-                    } else {
-                        line.removeAll(keepingCapacity: true)
-                        skippingOversizedLine = true
-                    }
-                }
-            }
-        }
-
-        guard !skippingOversizedLine, !line.isEmpty else { return nil }
-        if let modelID = consume(line) { return modelID }
-        return nil
     }
 }
 
@@ -78,9 +32,51 @@ public enum CodexModelDetector {
         for line in configuration.split(whereSeparator: \.isNewline) {
             let text = String(line)
             if let modelID = modelFromTopLevelLine(text) { return modelID }
-            if isTopLevelSection(Data(text.utf8)) { return nil }
+            if isTopLevelSection(text) { return nil }
         }
         return nil
+    }
+
+    static func readTopLevelModel(
+        _ read: (Int) throws -> Data?
+    ) -> String? {
+        let maximumScanBytes = 64 * 1024
+        let maximumLineBytes = 4 * 1024
+        var scannedBytes = 0
+        var line = Data()
+
+        func consume(_ line: Data) -> String? {
+            guard let text = String(data: line, encoding: .utf8) else { return nil }
+            return modelFromTopLevelLine(text)
+        }
+
+        while scannedBytes < maximumScanBytes {
+            let chunk: Data?
+            do {
+                chunk = try read(1)
+            } catch {
+                return nil
+            }
+            guard let chunk, !chunk.isEmpty else { break }
+            guard chunk.count == 1 else { return nil }
+
+            for byte in chunk {
+                scannedBytes += 1
+                if byte == 0x0A {
+                    guard let text = String(data: line, encoding: .utf8) else { return nil }
+                    if let modelID = modelFromTopLevelLine(text) { return modelID }
+                    if isTopLevelSection(text) { return nil }
+                    line.removeAll(keepingCapacity: true)
+                } else {
+                    guard line.count < maximumLineBytes else { return nil }
+                    line.append(byte)
+                }
+                if scannedBytes == maximumScanBytes { break }
+            }
+        }
+
+        guard !line.isEmpty else { return nil }
+        return consume(line)
     }
 
     fileprivate static func modelFromTopLevelLine(_ line: String) -> String? {
@@ -94,9 +90,8 @@ public enum CodexModelDetector {
         return quotedModel(String(trimmed[trimmed.index(after: equals)...]))
     }
 
-    fileprivate static func isTopLevelSection(_ line: Data) -> Bool {
-        guard let text = String(data: line, encoding: .utf8) else { return false }
-        return text.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("[")
+    fileprivate static func isTopLevelSection(_ line: String) -> Bool {
+        line.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("[")
     }
 
     private static func quotedModel(_ assignment: String) -> String? {
