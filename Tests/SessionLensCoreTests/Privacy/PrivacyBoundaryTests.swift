@@ -54,15 +54,20 @@ struct PrivacyBoundaryTests {
     @Test
     func persistentModelsContainNoSensitivePropertyNames() {
         let approved = Set([
+            "costSampleData",
             "costKindRaw",
             "costUSD",
+            "cumulativeCostUSD",
+            "cumulativeTokens",
             "createdAt",
             "day",
             "healthRaw",
             "key",
             "observedAt",
             "providerRaw",
+            "provenanceRaw",
             "quotaData",
+            "scopeID",
             "settingsData",
             "tokenData",
             "tokens",

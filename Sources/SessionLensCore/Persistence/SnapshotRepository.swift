@@ -5,6 +5,7 @@ public enum SnapshotRepositoryError: Error, Equatable {
     case corruptProvider(String)
     case corruptHealth(String)
     case corruptCostDisplay(String)
+    case corruptSpendProvenance(String)
 }
 
 @MainActor
@@ -110,7 +111,14 @@ public final class SnapshotRepository: SnapshotPersisting {
         record.tokenData = tokenData
         record.costKindRaw = costKindRaw
         record.costUSD = costUSD.map(NSNumber.init(value:))
+        record.costSampleData = try snapshot.costSample.map {
+            try encoder.encode($0)
+        }
         record.quotaData = quotaData
+
+        if let costSample = snapshot.costSample {
+            try upsert(costSample)
+        }
 
         for bucket in snapshot.dailyBuckets {
             try upsert(bucket, provider: snapshot.provider, observedAt: snapshot.observedAt)
@@ -146,6 +154,9 @@ public final class SnapshotRepository: SnapshotPersisting {
             kind: record.costKindRaw,
             value: record.costUSD?.doubleValue
         )
+        let costSample = try record.costSampleData.map {
+            try decoder.decode(ProviderSpendSample.self, from: $0)
+        }
         let dailyBuckets = try dailyUsage(
             provider: storedProvider,
             range: Date.distantPast...Date.distantFuture
@@ -159,7 +170,8 @@ public final class SnapshotRepository: SnapshotPersisting {
             costDisplay: costDisplay,
             dailyBuckets: dailyBuckets,
             quotaWindows: quotas,
-            modelBreakdowns: []
+            modelBreakdowns: [],
+            costSample: costSample
         )
     }
 
@@ -190,6 +202,33 @@ public final class SnapshotRepository: SnapshotPersisting {
                 day: $0.day,
                 tokens: Int($0.tokens),
                 costUSD: $0.costUSD?.doubleValue
+            )
+        }
+    }
+
+    public func spendSamples() throws -> [ProviderSpendSample] {
+        let request = SpendSampleRecord.fetchRequest()
+        request.sortDescriptors = [
+            NSSortDescriptor(key: "providerRaw", ascending: true),
+            NSSortDescriptor(key: "scopeID", ascending: true),
+            NSSortDescriptor(key: "observedAt", ascending: true),
+        ]
+        return try context.fetch(request).map { record in
+            guard let provider = ProviderID(rawValue: record.providerRaw) else {
+                throw SnapshotRepositoryError.corruptProvider(record.providerRaw)
+            }
+            guard let provenance = SpendProvenance(rawValue: record.provenanceRaw) else {
+                throw SnapshotRepositoryError.corruptSpendProvenance(
+                    record.provenanceRaw
+                )
+            }
+            return ProviderSpendSample(
+                provider: provider,
+                observedAt: record.observedAt,
+                scopeID: record.scopeID,
+                cumulativeCostUSD: record.cumulativeCostUSD?.doubleValue,
+                cumulativeTokens: record.cumulativeTokens?.intValue,
+                provenance: provenance
             )
         }
     }
@@ -276,6 +315,13 @@ public final class SnapshotRepository: SnapshotPersisting {
             matching: NSPredicate(format: "day < %@", dailyCutoff as NSDate)
         )
         try delete(
+            SpendSampleRecord.fetchRequest(),
+            matching: NSPredicate(
+                format: "observedAt < %@",
+                dailyCutoff as NSDate
+            )
+        )
+        try delete(
             NotificationRecord.fetchRequest(),
             matching: NSPredicate(
                 format: "createdAt < %@",
@@ -288,6 +334,7 @@ public final class SnapshotRepository: SnapshotPersisting {
     public func clearHistory() throws {
         try delete(SnapshotRecord.fetchRequest())
         try delete(DailyUsageRecord.fetchRequest())
+        try delete(SpendSampleRecord.fetchRequest())
         try delete(NotificationRecord.fetchRequest())
         try context.save()
     }
@@ -324,6 +371,10 @@ public final class SnapshotRepository: SnapshotPersisting {
         try context.count(for: NotificationRecord.fetchRequest())
     }
 
+    func spendSampleRecordCount() throws -> Int {
+        try context.count(for: SpendSampleRecord.fetchRequest())
+    }
+
     private func fetchSnapshot(key: String) throws -> SnapshotRecord? {
         let request = SnapshotRecord.fetchRequest()
         request.predicate = NSPredicate(format: "key == %@", key)
@@ -358,6 +409,20 @@ public final class SnapshotRepository: SnapshotPersisting {
         record.observedAt = observedAt
     }
 
+    private func upsert(_ sample: ProviderSpendSample) throws {
+        let request = SpendSampleRecord.fetchRequest()
+        request.predicate = NSPredicate(format: "key == %@", sample.id)
+        request.fetchLimit = 1
+        let record = try context.fetch(request).first ?? insertSpendSampleRecord()
+        record.key = sample.id
+        record.providerRaw = sample.provider.rawValue
+        record.observedAt = sample.observedAt
+        record.scopeID = sample.scopeID
+        record.cumulativeCostUSD = sample.cumulativeCostUSD.map(NSNumber.init(value:))
+        record.cumulativeTokens = sample.cumulativeTokens.map(NSNumber.init(value:))
+        record.provenanceRaw = sample.provenance.rawValue
+    }
+
     private func delete<Record: NSManagedObject>(
         _ request: NSFetchRequest<Record>,
         matching predicate: NSPredicate? = nil
@@ -380,6 +445,13 @@ public final class SnapshotRepository: SnapshotPersisting {
             forEntityName: "DailyUsageRecord",
             into: context
         ) as! DailyUsageRecord
+    }
+
+    private func insertSpendSampleRecord() -> SpendSampleRecord {
+        NSEntityDescription.insertNewObject(
+            forEntityName: "SpendSampleRecord",
+            into: context
+        ) as! SpendSampleRecord
     }
 
     private func insertNotificationRecord() -> NotificationRecord {
@@ -448,6 +520,12 @@ private extension SnapshotRecord {
 private extension DailyUsageRecord {
     static func fetchRequest() -> NSFetchRequest<DailyUsageRecord> {
         NSFetchRequest(entityName: "DailyUsageRecord")
+    }
+}
+
+private extension SpendSampleRecord {
+    static func fetchRequest() -> NSFetchRequest<SpendSampleRecord> {
+        NSFetchRequest(entityName: "SpendSampleRecord")
     }
 }
 

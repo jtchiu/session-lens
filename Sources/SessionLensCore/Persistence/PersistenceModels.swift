@@ -10,6 +10,7 @@ final class SnapshotRecord: NSManagedObject {
     @NSManaged var tokenData: Data?
     @NSManaged var costKindRaw: String
     @NSManaged var costUSD: NSNumber?
+    @NSManaged var costSampleData: Data?
     @NSManaged var quotaData: Data
 }
 
@@ -21,6 +22,17 @@ final class DailyUsageRecord: NSManagedObject {
     @NSManaged var tokens: Int64
     @NSManaged var costUSD: NSNumber?
     @NSManaged var observedAt: Date
+}
+
+@objc(SpendSampleRecord)
+final class SpendSampleRecord: NSManagedObject {
+    @NSManaged var key: String
+    @NSManaged var providerRaw: String
+    @NSManaged var observedAt: Date
+    @NSManaged var scopeID: String?
+    @NSManaged var cumulativeCostUSD: NSNumber?
+    @NSManaged var cumulativeTokens: NSNumber?
+    @NSManaged var provenanceRaw: String
 }
 
 @objc(NotificationRecord)
@@ -43,6 +55,7 @@ enum SessionLensPersistenceModel {
         model.entities = [
             snapshotEntity(),
             dailyUsageEntity(),
+            spendSampleEntity(),
             notificationEntity(),
             settingsEntity(),
         ]
@@ -61,6 +74,7 @@ enum SessionLensPersistenceModel {
                 attribute("tokenData", .binaryDataAttributeType, optional: true),
                 attribute("costKindRaw", .stringAttributeType),
                 attribute("costUSD", .doubleAttributeType, optional: true),
+                attribute("costSampleData", .binaryDataAttributeType, optional: true),
                 attribute("quotaData", .binaryDataAttributeType),
             ],
             uniqueBy: ["key"]
@@ -90,6 +104,23 @@ enum SessionLensPersistenceModel {
             attributes: [
                 attribute("key", .stringAttributeType),
                 attribute("createdAt", .dateAttributeType),
+            ],
+            uniqueBy: ["key"]
+        )
+    }
+
+    private static func spendSampleEntity() -> NSEntityDescription {
+        entity(
+            named: "SpendSampleRecord",
+            managedObjectClass: SpendSampleRecord.self,
+            attributes: [
+                attribute("key", .stringAttributeType),
+                attribute("providerRaw", .stringAttributeType),
+                attribute("observedAt", .dateAttributeType),
+                attribute("scopeID", .stringAttributeType, optional: true),
+                attribute("cumulativeCostUSD", .doubleAttributeType, optional: true),
+                attribute("cumulativeTokens", .integer64AttributeType, optional: true),
+                attribute("provenanceRaw", .stringAttributeType),
             ],
             uniqueBy: ["key"]
         )

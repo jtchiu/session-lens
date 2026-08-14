@@ -6,6 +6,74 @@ import Testing
 @Suite
 @MainActor
 struct SnapshotRepositoryTests {
+    @Test
+    func repositoryRoundTripsAndDeduplicatesSpendSamples() throws {
+        let repository = try SnapshotRepository.inMemory()
+        let sample = ProviderSpendSample(
+            provider: .claude,
+            observedAt: Fixtures.now,
+            scopeID: "hashed-session",
+            cumulativeCostUSD: 1.25,
+            cumulativeTokens: 10_000,
+            provenance: .estimated
+        )
+        let snapshot = ProviderSnapshot(
+            provider: .claude,
+            observedAt: Fixtures.now,
+            health: .ready,
+            tokens: nil,
+            costDisplay: .estimatedUSD(1.25),
+            dailyBuckets: [],
+            quotaWindows: [],
+            modelBreakdowns: [],
+            costSample: sample
+        )
+
+        try repository.record(snapshot)
+        try repository.record(snapshot)
+
+        #expect(try repository.spendSampleRecordCount() == 1)
+        #expect(try repository.spendSamples().first == sample)
+        #expect(try repository.latest(provider: .claude)?.costSample == sample)
+    }
+
+    @Test
+    func pruneAndClearHistoryManageSpendSamples() throws {
+        let repository = try SnapshotRepository.inMemory()
+        func snapshot(at date: Date, cost: Double) -> ProviderSnapshot {
+            let sample = ProviderSpendSample(
+                provider: .claude,
+                observedAt: date,
+                scopeID: "session",
+                cumulativeCostUSD: cost,
+                cumulativeTokens: Int(cost * 100),
+                provenance: .estimated
+            )
+            return ProviderSnapshot(
+                provider: .claude,
+                observedAt: date,
+                health: .ready,
+                tokens: nil,
+                costDisplay: .estimatedUSD(cost),
+                dailyBuckets: [],
+                quotaWindows: [],
+                modelBreakdowns: [],
+                costSample: sample
+            )
+        }
+
+        try repository.record(snapshot(at: Fixtures.day(80), cost: 1))
+        try repository.record(snapshot(at: Fixtures.day(95), cost: 2))
+        try repository.prune(now: Fixtures.day(100), historyRetentionDays: 10)
+
+        #expect(try repository.spendSampleRecordCount() == 1)
+        #expect(try repository.spendSamples().first?.observedAt == Fixtures.day(95))
+
+        try repository.clearHistory()
+
+        #expect(try repository.spendSampleRecordCount() == 0)
+    }
+
     @Test @MainActor
     func repositoryPreservesEstimatedCostProvenance() throws {
         let repository = try SnapshotRepository.inMemory()
