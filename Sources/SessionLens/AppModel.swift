@@ -92,7 +92,8 @@ final class AppModel: ObservableObject {
     let initialSnapshots = (try? repository.latestSnapshots()) ?? [:]
     let initialHistory = loadQuotaHistory(
       repository: repository,
-      snapshots: initialSnapshots
+      snapshots: initialSnapshots,
+      chartRange: settings.chartRange
     )
     let initialSpendSummary = loadSpendSummary(
       repository: repository,
@@ -234,13 +235,13 @@ final class AppModel: ObservableObject {
   }
 
   func setChartRange(_ range: UsageChartRange) {
-    chartRange = range
     var updated = settings
     updated.chartRange = range
     applySettings(updated)
   }
 
   func applySettings(_ updated: AppSettings) {
+    let chartRangeChanged = chartRange != updated.chartRange
     settings = updated
     chartRange = updated.chartRange
     Task { await coordinator.updateSettings(updated) }
@@ -254,6 +255,9 @@ final class AppModel: ObservableObject {
       settings: updated,
       now: Date()
     )
+    if chartRangeChanged {
+      reloadQuotaHistory(now: Date())
+    }
     if automaticRefreshEnabled {
       restartTimer()
     }
@@ -457,7 +461,8 @@ final class AppModel: ObservableObject {
   }
 
   private func reloadQuotaHistory(now: Date) {
-    let start = now.addingTimeInterval(-5 * 3_600)
+    let calendar = Calendar.current
+    let range = chartRange.dateRange(endingAt: now, calendar: calendar)
     var refreshed: [ProviderID: [QuotaHistoryPoint]] = [:]
     for (provider, snapshot) in snapshots {
       let window =
@@ -466,10 +471,11 @@ final class AppModel: ObservableObject {
         }) ?? snapshot.quotaWindows.first
       guard let duration = window?.durationMinutes else { continue }
       refreshed[provider] =
-        (try? repository.quotaHistory(
+        (try? repository.dailyQuotaHistory(
           provider: provider,
           durationMinutes: duration,
-          range: start...now
+          range: range,
+          calendar: calendar
         )) ?? []
     }
     quotaHistory = refreshed
@@ -489,20 +495,23 @@ final class AppModel: ObservableObject {
 
   private static func loadQuotaHistory(
     repository: SnapshotRepository,
-    snapshots: [ProviderID: ProviderSnapshot]
+    snapshots: [ProviderID: ProviderSnapshot],
+    chartRange: UsageChartRange
   ) -> [ProviderID: [QuotaHistoryPoint]] {
     let now = Date()
-    let range = now.addingTimeInterval(-5 * 3_600)...now
+    let calendar = Calendar.current
+    let range = chartRange.dateRange(endingAt: now, calendar: calendar)
     var history: [ProviderID: [QuotaHistoryPoint]] = [:]
     for (provider, snapshot) in snapshots {
       let window = snapshot.quotaWindows.first(where: {
         $0.durationMinutes == 10_080
       }) ?? snapshot.quotaWindows.first
       guard let duration = window?.durationMinutes else { continue }
-      history[provider] = (try? repository.quotaHistory(
+      history[provider] = (try? repository.dailyQuotaHistory(
         provider: provider,
         durationMinutes: duration,
-        range: range
+        range: range,
+        calendar: calendar
       )) ?? []
     }
     return history

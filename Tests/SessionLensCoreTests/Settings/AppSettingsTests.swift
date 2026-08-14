@@ -5,6 +5,25 @@ import Testing
 @Suite
 struct AppSettingsTests {
     @Test
+    func sevenDayDateRangeStartsAtTheLocalDaySixDaysBeforeTheReferenceTime() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: -14_400)!
+        let reference = calendar.date(
+            from: DateComponents(year: 2026, month: 8, day: 13, hour: 15, minute: 30)
+        )!
+
+        let range = UsageChartRange.sevenDays.dateRange(
+            endingAt: reference,
+            calendar: calendar
+        )
+
+        #expect(range.lowerBound == calendar.date(
+            from: DateComponents(year: 2026, month: 8, day: 7)
+        ))
+        #expect(range.upperBound == reference)
+    }
+
+    @Test
     func defaultsHaveNoImplicitOpenCodeQuotaAttribution() {
         let settings = AppSettings.defaults
 

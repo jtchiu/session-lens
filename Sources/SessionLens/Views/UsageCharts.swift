@@ -57,7 +57,7 @@ struct UsageRateChart: View {
                 }
                 .chartXAxis {
                     AxisMarks(values: .automatic(desiredCount: 3)) { value in
-                        AxisValueLabel(format: .dateTime.hour())
+                        AxisValueLabel(format: .dateTime.month().day())
                             .font(.system(size: 8))
                     }
                 }

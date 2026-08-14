@@ -6,6 +6,19 @@ public enum UsageChartRange: Int, CaseIterable, Codable, Hashable, Sendable {
     case ninetyDays = 90
 
     public var days: Int { rawValue }
+
+    public func dateRange(
+        endingAt end: Date,
+        calendar: Calendar
+    ) -> ClosedRange<Date> {
+        let endDay = calendar.startOfDay(for: end)
+        let start = calendar.date(
+            byAdding: .day,
+            value: -(days - 1),
+            to: endDay
+        ) ?? endDay
+        return start...end
+    }
 }
 
 public enum MenuBarDisplayMode: String, CaseIterable, Codable, Hashable, Sendable {
