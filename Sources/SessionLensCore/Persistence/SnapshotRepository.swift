@@ -268,6 +268,26 @@ public final class SnapshotRepository: SnapshotPersisting {
         }
     }
 
+    public func dailyQuotaHistory(
+        provider: ProviderID,
+        durationMinutes: Int?,
+        range: ClosedRange<Date>,
+        calendar: Calendar
+    ) throws -> [QuotaHistoryPoint] {
+        let points = try quotaHistory(
+            provider: provider,
+            durationMinutes: durationMinutes,
+            range: range
+        ).sorted { $0.observedAt < $1.observedAt }
+        var latestPointByDay: [Date: QuotaHistoryPoint] = [:]
+
+        for point in points {
+            latestPointByDay[calendar.startOfDay(for: point.observedAt)] = point
+        }
+
+        return latestPointByDay.values.sorted { $0.observedAt < $1.observedAt }
+    }
+
     public func markNotification(_ key: String, at date: Date = Date()) throws {
         guard try fetchNotification(key: key) == nil else { return }
         let record = insertNotificationRecord()

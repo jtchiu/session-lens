@@ -248,6 +248,73 @@ struct SnapshotRepositoryTests {
   }
 
   @Test
+  func dailyQuotaHistoryUsesLatestObservationPerCalendarDay() throws {
+    let repository = try SnapshotRepository.inMemory()
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+    let firstDay = calendar.date(
+      from: DateComponents(year: 2026, month: 8, day: 10, hour: 9)
+    )!
+    let latestFirstDay = firstDay.addingTimeInterval(60 * 60)
+    let secondDay = calendar.date(byAdding: .day, value: 1, to: firstDay)!
+
+    func snapshot(
+      observedAt: Date,
+      usedPercent: Double,
+      resetsAt: Date?,
+      provenance: MetricProvenance
+    ) -> ProviderSnapshot {
+      Fixtures.aggregateSnapshot(
+        provider: .codex,
+        observedAt: observedAt,
+        quotaWindows: [
+          QuotaWindow(
+            id: "codex:10080:reset-\(observedAt.timeIntervalSince1970)",
+            label: "Weekly",
+            durationMinutes: 10_080,
+            usedPercent: usedPercent,
+            resetsAt: resetsAt,
+            provenance: provenance
+          )
+        ]
+      )
+    }
+
+    try repository.record(snapshot(
+      observedAt: firstDay,
+      usedPercent: 20,
+      resetsAt: calendar.date(byAdding: .day, value: 3, to: firstDay),
+      provenance: .exactProvider
+    ))
+    try repository.record(snapshot(
+      observedAt: latestFirstDay,
+      usedPercent: 36,
+      resetsAt: calendar.date(byAdding: .day, value: 4, to: firstDay),
+      provenance: .localBudget
+    ))
+    try repository.record(snapshot(
+      observedAt: secondDay,
+      usedPercent: 44,
+      resetsAt: calendar.date(byAdding: .day, value: 5, to: firstDay),
+      provenance: .estimated
+    ))
+
+    let points = try repository.dailyQuotaHistory(
+      provider: .codex,
+      durationMinutes: 10_080,
+      range: firstDay...secondDay,
+      calendar: calendar
+    )
+
+    #expect(points.map(\.usedPercent) == [36, 44])
+    #expect(points.map(\.observedAt) == [latestFirstDay, secondDay])
+    #expect(points[0].resetsAt == calendar.date(byAdding: .day, value: 4, to: firstDay))
+    #expect(points[0].provenance == .localBudget)
+    #expect(points[1].resetsAt == calendar.date(byAdding: .day, value: 5, to: firstDay))
+    #expect(points[1].provenance == .estimated)
+  }
+
+  @Test
   func notificationKeysAreDurablyDeduplicated() throws {
     let repository = try SnapshotRepository.inMemory()
 
