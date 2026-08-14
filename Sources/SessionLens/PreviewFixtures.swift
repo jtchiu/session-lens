@@ -13,6 +13,81 @@ enum PreviewFixtures {
         historyRetentionDays: 365
     )
 
+    static let codexModelID = "gpt-5"
+
+    static let pricingCatalog = PricingCatalog(
+        models: [
+            PricingCatalogModel(
+                providerID: "openai",
+                modelID: "gpt-5",
+                rate: PricingRate(
+                    inputPerMillion: 2.5,
+                    outputPerMillion: 10,
+                    reasoningPerMillion: 10,
+                    cacheReadPerMillion: 0.25,
+                    cacheWritePerMillion: 3.75
+                )
+            ),
+            PricingCatalogModel(
+                providerID: "anthropic",
+                modelID: "claude-sonnet",
+                rate: PricingRate(
+                    inputPerMillion: 3,
+                    outputPerMillion: 15,
+                    reasoningPerMillion: 15,
+                    cacheReadPerMillion: 0.3,
+                    cacheWritePerMillion: 3.75
+                )
+            ),
+        ],
+        updatedAt: now,
+        fetchedAt: now
+    )
+
+    static let pricingState = PricingCatalogState(
+        source: .live,
+        catalog: pricingCatalog
+    )
+
+    static let pricingCatalogClient = PricingCatalogClient(
+        cacheURL: FileManager.default.temporaryDirectory
+            .appendingPathComponent("SessionLens-preview-pricing-catalog.json"),
+        transport: PreviewPricingCatalogTransport()
+    )
+
+    static let pricingCatalogData = Data(
+        #"""
+        {
+          "openai": {
+            "models": {
+              "gpt-5": {
+                "cost": {
+                  "input": 2.5,
+                  "output": 10,
+                  "reasoning": 10,
+                  "cache_read": 0.25,
+                  "cache_write": 3.75
+                }
+              }
+            }
+          },
+          "anthropic": {
+            "models": {
+              "claude-sonnet": {
+                "cost": {
+                  "input": 3,
+                  "output": 15,
+                  "reasoning": 15,
+                  "cache_read": 0.3,
+                  "cache_write": 3.75
+                }
+              }
+            }
+          }
+        }
+        """#.utf8
+    )
+
     private static let claudeSpendSample = ProviderSpendSample(
         provider: .claude,
         observedAt: now,
@@ -141,7 +216,9 @@ enum PreviewFixtures {
             historyRetentionDays: settings.historyRetentionDays,
             snapshots: snapshots,
             dailyBuckets: dailyBuckets,
-            samples: [claudeSpendBaseline, claudeSpendSample]
+            samples: [claudeSpendBaseline, claudeSpendSample],
+            catalogState: pricingState,
+            codexModelID: codexModelID
         )
     }()
 
@@ -177,5 +254,16 @@ enum PreviewFixtures {
                 costUSD: costScale.map { Double(value) / 1_000_000 * $0 }
             )
         }
+    }
+}
+
+private struct PreviewPricingCatalogTransport: PricingCatalogTransport {
+    func fetch(ifNoneMatch: String?) async throws -> PricingCatalogHTTPResponse {
+        PricingCatalogHTTPResponse(
+            statusCode: 200,
+            data: PreviewFixtures.pricingCatalogData,
+            etag: nil,
+            lastModified: nil
+        )
     }
 }

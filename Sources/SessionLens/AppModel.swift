@@ -7,6 +7,7 @@ import SessionLensCore
 final class AppModel: ObservableObject {
   @Published private(set) var snapshots: [ProviderID: ProviderSnapshot]
   @Published private(set) var spendSummary: SpendSummary
+  @Published private(set) var pricingState: PricingCatalogState
   @Published private(set) var quotaHistory: [ProviderID: [QuotaHistoryPoint]]
   @Published var selectedProvider: ProviderID
   @Published private(set) var chartRange: UsageChartRange
@@ -19,6 +20,8 @@ final class AppModel: ObservableObject {
 
   private let coordinator: UsageCoordinator
   private let repository: SnapshotRepository
+  private let pricingCatalogClient: PricingCatalogClient
+  private let codexModelID: String?
   private let notificationScheduler: any NotificationScheduling
   private let notificationEvaluator: NotificationEvaluator
   private let claudeBridgeInstaller: ClaudeBridgeInstaller?
@@ -26,6 +29,7 @@ final class AppModel: ObservableObject {
   private let automaticRefreshEnabled: Bool
   private var timerTask: Task<Void, Never>?
   private var refreshTask: Task<Void, Never>?
+  private var pricingRefreshTask: Task<Void, Never>?
 
   init(
     coordinator: UsageCoordinator,
@@ -34,6 +38,12 @@ final class AppModel: ObservableObject {
     settings: AppSettings,
     initialSnapshots: [ProviderID: ProviderSnapshot] = [:],
     initialSpendSummary: SpendSummary = .empty(),
+    initialPricingState: PricingCatalogState = PricingCatalogState(
+      source: .unavailable,
+      catalog: nil
+    ),
+    pricingCatalogClient: PricingCatalogClient? = nil,
+    codexModelID: String? = nil,
     initialQuotaHistory: [ProviderID: [QuotaHistoryPoint]] = [:],
     selectedProvider: ProviderID = .codex,
     automaticRefreshEnabled: Bool = true,
@@ -44,10 +54,17 @@ final class AppModel: ObservableObject {
   ) {
     self.coordinator = coordinator
     self.repository = repository
+    self.pricingCatalogClient = pricingCatalogClient
+      ?? Self.makePricingCatalogClient(repository: repository)
+    self.codexModelID = codexModelID
+      ?? CodexModelDetector.live(
+        homeDirectory: FileManager.default.homeDirectoryForCurrentUser
+      )
     self.notificationScheduler = notificationScheduler
     self.settings = settings
     self.snapshots = initialSnapshots
     self.spendSummary = initialSpendSummary
+    self.pricingState = initialPricingState
     self.quotaHistory = initialQuotaHistory
     self.selectedProvider = selectedProvider
     self.chartRange = settings.chartRange
@@ -148,6 +165,9 @@ final class AppModel: ObservableObject {
       settings: settings,
       initialSnapshots: fixtureSnapshots,
       initialSpendSummary: PreviewFixtures.spendSummary,
+      initialPricingState: PreviewFixtures.pricingState,
+      pricingCatalogClient: PreviewFixtures.pricingCatalogClient,
+      codexModelID: PreviewFixtures.codexModelID,
       initialQuotaHistory: PreviewFixtures.quotaHistory,
       selectedProvider: .codex,
       automaticRefreshEnabled: false
@@ -165,11 +185,14 @@ final class AppModel: ObservableObject {
     timerTask = nil
     refreshTask?.cancel()
     refreshTask = nil
+    pricingRefreshTask?.cancel()
+    pricingRefreshTask = nil
     Task { await coordinator.shutdown() }
   }
 
   func refresh() {
     guard refreshTask == nil else { return }
+    refreshPricing()
     refreshTask = Task { [weak self] in
       guard let self else { return }
       await refreshNow()
@@ -178,6 +201,7 @@ final class AppModel: ObservableObject {
   }
 
   func refreshNow(at now: Date = Date()) async {
+    refreshPricing(now: now)
     guard !isRefreshing else { return }
     isRefreshing = true
     defer { isRefreshing = false }
@@ -192,12 +216,7 @@ final class AppModel: ObservableObject {
       now: now,
       historyRetentionDays: settings.historyRetentionDays
     )
-    spendSummary = Self.loadSpendSummary(
-      repository: repository,
-      snapshots: snapshots,
-      settings: settings,
-      now: now
-    )
+    reloadSpendSummary(now: now)
     guard settings.notificationsEnabled else { return }
 
     for provider in settings.providerOrder {
@@ -218,6 +237,14 @@ final class AppModel: ObservableObject {
         }
       }
     }
+  }
+
+  func refreshPricingIfNeeded(now: Date = Date()) async {
+    pricingState = await pricingCatalogClient.state(now: now)
+    reloadSpendSummary(now: now)
+
+    pricingState = await pricingCatalogClient.refreshIfNeeded(now: now)
+    reloadSpendSummary(now: now)
   }
 
   func popoverDidOpen(now: Date = Date()) {
@@ -249,12 +276,7 @@ final class AppModel: ObservableObject {
       now: Date(),
       historyRetentionDays: updated.historyRetentionDays
     )
-    spendSummary = Self.loadSpendSummary(
-      repository: repository,
-      snapshots: snapshots,
-      settings: updated,
-      now: Date()
-    )
+    reloadSpendSummary(now: Date())
     if chartRangeChanged {
       reloadQuotaHistory(now: Date())
     }
@@ -419,7 +441,7 @@ final class AppModel: ObservableObject {
     do {
       try repository.clearHistory()
       snapshots = [:]
-      spendSummary = .empty(retentionDays: settings.historyRetentionDays)
+      reloadSpendSummary(now: Date())
       quotaHistory = [:]
       errorMessage = nil
     } catch {
@@ -455,9 +477,29 @@ final class AppModel: ObservableObject {
       while !Task.isCancelled {
         try? await Task.sleep(for: .seconds(interval))
         guard !Task.isCancelled, let self else { return }
-        await refreshNow()
+        refresh()
       }
     }
+  }
+
+  private func refreshPricing(now: Date = Date()) {
+    guard pricingRefreshTask == nil else { return }
+    pricingRefreshTask = Task { [weak self] in
+      guard let self else { return }
+      await refreshPricingIfNeeded(now: now)
+      pricingRefreshTask = nil
+    }
+  }
+
+  private func reloadSpendSummary(now: Date) {
+    spendSummary = Self.loadSpendSummary(
+      repository: repository,
+      snapshots: snapshots,
+      settings: settings,
+      pricingState: pricingState,
+      codexModelID: codexModelID,
+      now: now
+    )
   }
 
   private func reloadQuotaHistory(now: Date) {
@@ -493,6 +535,28 @@ final class AppModel: ObservableObject {
     }
   }
 
+  private static func makePricingCatalogClient(
+    repository: SnapshotRepository
+  ) -> PricingCatalogClient {
+    let cacheURL: URL
+    if let storeURL = repository.storeURL {
+      cacheURL = storeURL
+        .deletingLastPathComponent()
+        .appendingPathComponent("pricing-catalog.json")
+    } else {
+      let applicationSupportURL = (try? FileManager.default.url(
+        for: .applicationSupportDirectory,
+        in: .userDomainMask,
+        appropriateFor: nil,
+        create: true
+      )) ?? FileManager.default.temporaryDirectory
+      cacheURL = applicationSupportURL
+        .appendingPathComponent("SessionLens", isDirectory: true)
+        .appendingPathComponent("pricing-catalog.json")
+    }
+    return PricingCatalogClient(cacheURL: cacheURL)
+  }
+
   private static func loadQuotaHistory(
     repository: SnapshotRepository,
     snapshots: [ProviderID: ProviderSnapshot],
@@ -522,6 +586,11 @@ final class AppModel: ObservableObject {
     repository: SnapshotRepository,
     snapshots: [ProviderID: ProviderSnapshot],
     settings: AppSettings,
+    pricingState: PricingCatalogState = PricingCatalogState(
+      source: .unavailable,
+      catalog: nil
+    ),
+    codexModelID: String? = nil,
     now: Date
   ) -> SpendSummary {
     var dailyBuckets: [ProviderID: [UsageBucket]] = [:]
@@ -537,7 +606,9 @@ final class AppModel: ObservableObject {
       historyRetentionDays: settings.historyRetentionDays,
       snapshots: snapshots,
       dailyBuckets: dailyBuckets,
-      samples: samples
+      samples: samples,
+      catalogState: pricingState,
+      codexModelID: codexModelID
     )
   }
 

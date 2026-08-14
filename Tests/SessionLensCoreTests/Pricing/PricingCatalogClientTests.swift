@@ -219,6 +219,87 @@ struct PricingCatalogClientTests {
         #expect(state.catalog == PricingFixtures.catalog)
         #expect(await transport.fetchCount() == 0)
     }
+
+    @Test
+    func catalogRefreshRecomputesApiEquivalentSpendWithoutChangingActualSpendOrSnapshots() async throws {
+        let now = PricingFixtures.day(1)
+        let snapshot = ProviderSnapshot(
+            provider: .opencode,
+            observedAt: now,
+            health: .ready,
+            tokens: nil,
+            costDisplay: .exactUSD(7),
+            dailyBuckets: [],
+            quotaWindows: [],
+            modelBreakdowns: [
+                ModelUsage(
+                    providerID: "openai",
+                    modelID: "gpt-test",
+                    tokens: TokenBreakdown(
+                        input: 1_000_000,
+                        output: 0,
+                        reasoning: 0,
+                        cacheRead: 0,
+                        cacheWrite: 0
+                    ),
+                    costUSD: 7
+                )
+            ]
+        )
+        let snapshots: [ProviderID: ProviderSnapshot] = [.opencode: snapshot]
+        let dailyBuckets: [ProviderID: [UsageBucket]] = [
+            .opencode: [UsageBucket(day: now, tokens: 1_000_000, costUSD: 7)]
+        ]
+        let unavailableCacheURL = TestCacheFile.emptyURL()
+        defer { TestCacheFile.remove(unavailableCacheURL) }
+        let unavailableClient = PricingCatalogClient(
+            cacheURL: unavailableCacheURL,
+            transport: FakePricingTransport(response: .failure(FakePricingTransport.Failure.timeout)),
+            now: { now }
+        )
+
+        let unavailableState = await unavailableClient.refreshIfNeeded(now: now)
+        let unavailableSummary = SpendSummaryLoader.makeSummary(
+            now: now,
+            historyRetentionDays: 30,
+            snapshots: snapshots,
+            dailyBuckets: dailyBuckets,
+            samples: [],
+            catalogState: unavailableState
+        )
+
+        let liveCacheURL = TestCacheFile.emptyURL()
+        defer { TestCacheFile.remove(liveCacheURL) }
+        let liveClient = PricingCatalogClient(
+            cacheURL: liveCacheURL,
+            transport: FakePricingTransport(
+                response: .response(.init(
+                    statusCode: 200,
+                    data: PricingFixtures.catalogJSON,
+                    etag: nil,
+                    lastModified: nil
+                ))
+            ),
+            now: { now }
+        )
+        let liveState = await liveClient.refreshIfNeeded(now: now)
+        let liveSummary = SpendSummaryLoader.makeSummary(
+            now: now,
+            historyRetentionDays: 30,
+            snapshots: snapshots,
+            dailyBuckets: dailyBuckets,
+            samples: [],
+            catalogState: liveState
+        )
+
+        #expect(unavailableState.source == .unavailable)
+        #expect(unavailableSummary.providers[.opencode]?.week.costUSD == 7)
+        #expect(unavailableSummary.apiEquivalent.providers[.opencode]?.week.costUSD == nil)
+        #expect(liveState.source == .live)
+        #expect(liveSummary.providers[.opencode]?.week.costUSD == 7)
+        #expect(liveSummary.apiEquivalent.providers[.opencode]?.week.costUSD == 1.5)
+        #expect(snapshots == [.opencode: snapshot])
+    }
 }
 
 private enum PricingFixtures {
@@ -301,7 +382,7 @@ private enum PricingFixtures {
 }
 
 private actor FakePricingTransport: PricingCatalogTransport {
-    enum Failure: Error { case requested }
+    enum Failure: Error { case requested, timeout }
 
     enum Response: Sendable {
         case response(PricingCatalogHTTPResponse)
