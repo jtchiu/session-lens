@@ -13,6 +13,28 @@ enum PreviewFixtures {
         historyRetentionDays: 365
     )
 
+    private static let claudeSpendSample = ProviderSpendSample(
+        provider: .claude,
+        observedAt: now,
+        scopeID: "preview-claude",
+        cumulativeCostUSD: 3.10,
+        cumulativeTokens: 250_000,
+        provenance: .estimated
+    )
+
+    private static let claudeSpendBaseline = ProviderSpendSample(
+        provider: .claude,
+        observedAt: Calendar.current.date(
+            byAdding: .day,
+            value: -1,
+            to: now
+        ) ?? now,
+        scopeID: "preview-claude",
+        cumulativeCostUSD: 1.20,
+        cumulativeTokens: 100_000,
+        provenance: .estimated
+    )
+
     static let snapshots: [ProviderID: ProviderSnapshot] = [
         .opencode: ProviderSnapshot(
             provider: .opencode,
@@ -55,10 +77,22 @@ enum PreviewFixtures {
                 ),
             ]
         ),
-        .claude: .unavailable(
+        .claude: ProviderSnapshot(
             provider: .claude,
-            health: .setupRequired,
-            observedAt: now
+            observedAt: now,
+            health: .ready,
+            tokens: TokenBreakdown(
+                input: 120_000,
+                output: 80_000,
+                reasoning: 0,
+                cacheRead: 40_000,
+                cacheWrite: 10_000
+            ),
+            costDisplay: .estimatedUSD(3.10),
+            dailyBuckets: [],
+            quotaWindows: [],
+            modelBreakdowns: [],
+            costSample: claudeSpendSample
         ),
         .codex: ProviderSnapshot(
             provider: .codex,
@@ -95,6 +129,21 @@ enum PreviewFixtures {
             modelBreakdowns: []
         ),
     ]
+
+    static let spendSummary: SpendSummary = {
+        let dailyBuckets = Dictionary(
+            uniqueKeysWithValues: ProviderID.allCases.map { provider in
+                (provider, snapshots[provider]?.dailyBuckets ?? [])
+            }
+        )
+        return SpendSummaryLoader.makeSummary(
+            now: now,
+            historyRetentionDays: settings.historyRetentionDays,
+            snapshots: snapshots,
+            dailyBuckets: dailyBuckets,
+            samples: [claudeSpendBaseline, claudeSpendSample]
+        )
+    }()
 
     static let quotaHistory: [ProviderID: [QuotaHistoryPoint]] = [
         .codex: [26, 22, 31, 38, 50, 45, 49, 48, 42, 39, 36]

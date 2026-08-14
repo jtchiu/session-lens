@@ -75,11 +75,17 @@ struct PopoverView: View {
 
   @ViewBuilder
   private var content: some View {
-    if let snapshot = model.selectedSnapshot,
-      snapshot.health == .ready || snapshot.health == .stale
-    {
-      ScrollView {
-        VStack(spacing: SessionLensSpacing.small) {
+    ScrollView {
+      VStack(spacing: SessionLensSpacing.small) {
+        SpendSummaryView(
+          summary: model.spendSummary,
+          providerOrder: model.providerOrder
+        )
+
+        if let snapshot = model.selectedSnapshot,
+          snapshot.health == .ready || snapshot.health == .stale
+        {
+          Divider()
           QuotaSection(snapshot: snapshot)
           Divider()
           UsageRateChart(
@@ -96,17 +102,18 @@ struct PopoverView: View {
           )
           Divider()
           TokenSummaryView(snapshot: snapshot)
+        } else {
+          Divider()
+          ProviderStateView(
+            snapshot: model.selectedSnapshot,
+            refresh: model.refresh
+          )
         }
-        .padding(.horizontal, SessionLensSpacing.large)
-        .padding(.vertical, SessionLensSpacing.xSmall)
       }
-      .scrollIndicators(.hidden)
-    } else {
-      ProviderStateView(
-        snapshot: model.selectedSnapshot,
-        refresh: model.refresh
-      )
+      .padding(.horizontal, SessionLensSpacing.large)
+      .padding(.vertical, SessionLensSpacing.xSmall)
     }
+    .scrollIndicators(.hidden)
   }
 }
 

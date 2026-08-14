@@ -146,6 +146,7 @@ final class AppModel: ObservableObject {
       ),
       settings: settings,
       initialSnapshots: fixtureSnapshots,
+      initialSpendSummary: PreviewFixtures.spendSummary,
       initialQuotaHistory: PreviewFixtures.quotaHistory,
       selectedProvider: .codex,
       automaticRefreshEnabled: false
