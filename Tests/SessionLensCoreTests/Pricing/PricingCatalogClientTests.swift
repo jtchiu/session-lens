@@ -252,9 +252,12 @@ struct PricingCatalogClientTests {
         ]
         let unavailableCacheURL = TestCacheFile.emptyURL()
         defer { TestCacheFile.remove(unavailableCacheURL) }
+        let unavailableTransport = FakePricingTransport(
+            response: .failure(FakePricingTransport.Failure.timeout)
+        )
         let unavailableClient = PricingCatalogClient(
             cacheURL: unavailableCacheURL,
-            transport: FakePricingTransport(response: .failure(FakePricingTransport.Failure.timeout)),
+            transport: unavailableTransport,
             now: { now }
         )
 
@@ -293,6 +296,7 @@ struct PricingCatalogClientTests {
         )
 
         #expect(unavailableState.source == .unavailable)
+        #expect(await unavailableTransport.lastThrownFailure() == .timeout)
         #expect(unavailableSummary.providers[.opencode]?.week.costUSD == 7)
         #expect(unavailableSummary.apiEquivalent.providers[.opencode]?.week.costUSD == nil)
         #expect(liveState.source == .live)
@@ -382,7 +386,7 @@ private enum PricingFixtures {
 }
 
 private actor FakePricingTransport: PricingCatalogTransport {
-    enum Failure: Error { case requested, timeout }
+    enum Failure: Error, Equatable { case requested, timeout }
 
     enum Response: Sendable {
         case response(PricingCatalogHTTPResponse)
@@ -391,6 +395,7 @@ private actor FakePricingTransport: PricingCatalogTransport {
 
     private let response: Response
     private var etags: [String?] = []
+    private var thrownFailure: Failure?
 
     init(response: Response) {
         self.response = response
@@ -400,12 +405,15 @@ private actor FakePricingTransport: PricingCatalogTransport {
         etags.append(ifNoneMatch)
         switch response {
         case let .response(response): return response
-        case .failure: throw Failure.requested
+        case let .failure(failure):
+            thrownFailure = failure
+            throw failure
         }
     }
 
     func fetchCount() -> Int { etags.count }
     func lastETag() -> String? { etags.last ?? nil }
+    func lastThrownFailure() -> Failure? { thrownFailure }
 }
 
 private enum TestCacheFile {

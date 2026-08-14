@@ -30,6 +30,7 @@ final class AppModel: ObservableObject {
   private var timerTask: Task<Void, Never>?
   private var refreshTask: Task<Void, Never>?
   private var pricingRefreshTask: Task<Void, Never>?
+  private var pricingRefreshGeneration: UUID?
 
   init(
     coordinator: UsageCoordinator,
@@ -185,6 +186,7 @@ final class AppModel: ObservableObject {
     timerTask = nil
     refreshTask?.cancel()
     refreshTask = nil
+    pricingRefreshGeneration = nil
     pricingRefreshTask?.cancel()
     pricingRefreshTask = nil
     Task { await coordinator.shutdown() }
@@ -240,11 +242,14 @@ final class AppModel: ObservableObject {
   }
 
   func refreshPricingIfNeeded(now: Date = Date()) async {
-    pricingState = await pricingCatalogClient.state(now: now)
-    reloadSpendSummary(now: now)
+    let client = pricingCatalogClient
+    let cachedState = await client.state(now: now)
+    guard !Task.isCancelled else { return }
+    applyPricingState(cachedState, now: now)
 
-    pricingState = await pricingCatalogClient.refreshIfNeeded(now: now)
-    reloadSpendSummary(now: now)
+    let refreshedState = await client.refreshIfNeeded(now: now)
+    guard !Task.isCancelled else { return }
+    applyPricingState(refreshedState, now: now)
   }
 
   func popoverDidOpen(now: Date = Date()) {
@@ -484,11 +489,37 @@ final class AppModel: ObservableObject {
 
   private func refreshPricing(now: Date = Date()) {
     guard pricingRefreshTask == nil else { return }
-    pricingRefreshTask = Task { [weak self] in
-      guard let self else { return }
-      await refreshPricingIfNeeded(now: now)
-      pricingRefreshTask = nil
+    let generation = UUID()
+    let client = pricingCatalogClient
+    pricingRefreshGeneration = generation
+    pricingRefreshTask = Task { [weak self, client] in
+      let cachedState = await client.state(now: now)
+      guard !Task.isCancelled else { return }
+      if let self, self.pricingRefreshGeneration == generation {
+        self.applyPricingState(cachedState, now: now)
+      } else {
+        return
+      }
+
+      let refreshedState = await client.refreshIfNeeded(now: now)
+      guard !Task.isCancelled,
+            let self,
+            self.pricingRefreshGeneration == generation
+      else { return }
+      self.applyPricingState(refreshedState, now: now)
+      self.finishPricingRefresh(generation: generation)
     }
+  }
+
+  private func applyPricingState(_ state: PricingCatalogState, now: Date) {
+    pricingState = state
+    reloadSpendSummary(now: now)
+  }
+
+  private func finishPricingRefresh(generation: UUID) {
+    guard pricingRefreshGeneration == generation else { return }
+    pricingRefreshTask = nil
+    pricingRefreshGeneration = nil
   }
 
   private func reloadSpendSummary(now: Date) {
